@@ -2,6 +2,7 @@ package main
 
 import (
 	"Network-go/network/bcast"
+	"flag"
 	"fmt"
 	"time"
 )
@@ -19,64 +20,73 @@ const (
 )
 
 const N_FLOORS = 4
+const N_ELEVATORS = 3
 
 type Direction int
 type Role int
 
 type Message struct {
-	Role      Role      `json:"role"`
-	Direction Direction `json:"direction"`
-	Floor     int       `json:"floor"`
-	UpList    []int     `json:"upList"`
-	DownList  []int     `json:"downList"`
-	CabList   []int     `json:"cabList"`
+	ID        int                         `json:"id"`
+	Role      Role                        `json:"role"`
+	Direction Direction                   `json:"direction"`
+	Floor     int                         `json:"floor"`
+	UpList    [N_FLOORS]int               `json:"upList"`
+	DownList  [N_FLOORS]int               `json:"downList"`
+	CabLists  [N_ELEVATORS][N_FLOORS]int  `json:"cabLists"`
 }
 
 var currentRole Role = SLAVE
 var currentDirection Direction = STAND_STILL
 var lastFloor = -1
+var elevatorID int
 
 var upList = [N_FLOORS]int{}
 var downList = [N_FLOORS]int{}
-var cabList = [N_FLOORS]int{}
+var cabLists = [N_ELEVATORS][N_FLOORS]int{}
 
 func determineRole(receiveChan chan Message) {
-	start := time.Now()
-	masterFound := false
-	backupFound := false
+	for {
+		start := time.Now()
+		masterFound := false
+		backupFound := false
 
-	// Listen for 1 second
-	for time.Since(start) < time.Second {
-		select {
-		case msg := <-receiveChan:
-			// Check if master is alive
-			if msg.Role == Role(MASTER) {
-				masterFound = true
-
-				// Check if backup is alive
-			} else if msg.Role == Role(BACKUP) {
-				backupFound = true
+		// Listen for 1 second
+		for time.Since(start) < time.Second {
+			select {
+			case msg := <-receiveChan:
+				if msg.Role == MASTER {
+					masterFound = true
+				} else if msg.Role == BACKUP {
+					backupFound = true
+				}
 			}
 		}
-	}
 
-	if !masterFound {
-		currentRole = MASTER
-		fmt.Println("No MASTER found, becoming MASTER")
-	} else if !backupFound {
-		currentRole = BACKUP
-		fmt.Println("No BACKUP found, becoming BACKUP")
-	} else {
-		currentRole = SLAVE
-		fmt.Println("MASTER and BACKUP found, staying SLAVE")
+		if currentRole == BACKUP && !masterFound {
+			fmt.Printf("Elevator %d: No MASTER found, BACKUP becoming MASTER\n", elevatorID)
+			currentRole = MASTER
+		} else if currentRole == SLAVE && !backupFound {
+			fmt.Printf("Elevator %d: No BACKUP found, SLAVE becoming BACKUP\n", elevatorID)
+			currentRole = BACKUP
+		}
 
-		// If is slave go back to listen
-		// Theres probably a better way to do this but im tired
-		determineRole(receiveChan)
+		switch currentRole {
+		case MASTER:
+			fmt.Printf("Elevator %d: Now MASTER\n", elevatorID)
+		case BACKUP:
+			fmt.Printf("Elevator %d: Now BACKUP\n", elevatorID)
+		case SLAVE:
+			fmt.Printf("Elevator %d: Now SLAVE\n", elevatorID)
+		}
 	}
 }
 
 func main() {
+	elevatorIDPtr := flag.Int("id", 0, "ID of the elevator")
+	flag.Parse()
+
+	elevatorID = *elevatorIDPtr
+
 	port := 9000
 
 	sendChan := make(chan Message)
@@ -91,16 +101,19 @@ func main() {
 	go func() {
 		for {
 			sendChan <- Message{
+				ID:        elevatorID,
 				Role:      currentRole,
 				Direction: currentDirection,
 				Floor:     lastFloor,
-				UpList:    upList[:],
-				DownList:  downList[:],
-				CabList:   cabList[:],
+				UpList:    upList,
+				DownList:  downList,
+				CabLists:  cabLists,
 			}
 			time.Sleep(200 * time.Millisecond)
 		}
 	}()
 
-	for {}
+	
+
+	select {}
 }
