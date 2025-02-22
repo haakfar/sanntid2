@@ -1,5 +1,8 @@
 package config
 
+import (
+	"Driver-go/elevio"
+)
 
 const (
 	STAND_STILL Direction = iota
@@ -13,18 +16,45 @@ const (
 	MASTER
 )
 
+const (
+	EB_Idle ElevatorBehaviour = iota
+	EB_DoorOpen
+	EB_Moving
+)
+
+const (
+	RECEIVED MessageType = iota
+	SENT 
+)
+
 const N_FLOORS = 4
 const N_ELEVATORS = 3
+const N_BUTTONS = 3
+const DOOR_OPEN_DURATION = 3.0
+
+const Port = 9000
 
 type Direction int
 type Role int
+type MessageType int
 
-type Message struct {
-	ID        int                         `json:"id"`
-	Role      Role                        `json:"role"`
-	Direction Direction                   `json:"direction"`
-	Floor     int                         `json:"floor"`
-	UpLists    [N_ELEVATORS][N_FLOORS]int  `json:"upLists"`
-	DownLists  [N_ELEVATORS][N_FLOORS]int  `json:"downLists"`
-	CabLists  [N_ELEVATORS][N_FLOORS]int  `json:"cabLists"`
+type ElevatorBehaviour int
+
+type Elevator struct {
+	Floor     int
+	Dirn      elevio.MotorDirection
+	Behaviour ElevatorBehaviour
+	Requests  [][]bool 
+}
+
+type WorldView struct {
+	Elevators [N_ELEVATORS]Elevator
+	SentBy int
+	Role Role
+}
+
+type ButtonMessage struct {
+	ButtonEvent elevio.ButtonEvent
+	ElevatorID int
+	MessageType MessageType
 }
