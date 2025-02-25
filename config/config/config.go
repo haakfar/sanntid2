@@ -49,7 +49,7 @@ type Elevator struct {
 
 type WorldView struct {
 	Elevators [N_ELEVATORS]Elevator
-	SentBy int
+	ElevatorID int
 	Role Role
 }
 
@@ -57,4 +57,9 @@ type ButtonMessage struct {
 	ButtonEvent elevio.ButtonEvent
 	ElevatorID int
 	MessageType MessageType
+}
+
+type ElevatorUpdate struct {
+	ElevatorID int
+	Alive bool
 }
