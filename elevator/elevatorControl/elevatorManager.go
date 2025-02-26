@@ -41,12 +41,14 @@ func StartManager(elevatorID int){
 
 func buttonListener(btnCh chan elevio.ButtonEvent){
 
+	// receives button broadcasts and sends them to the elevator
 	receiveChan := make(chan config.ButtonMessage)
 	go bcast.Receiver(config.Port,receiveChan)
 
 	for {
 		select {
 		case btnMsg := <- receiveChan:
+			// if its SENT then its sent by the master
 			if btnMsg.MessageType == config.SENT && btnMsg.ElevatorID == worldView.ElevatorID {
 				btnCh <- btnMsg.ButtonEvent
 			}
@@ -55,6 +57,8 @@ func buttonListener(btnCh chan elevio.ButtonEvent){
 }
 
 func buttonSender(){
+
+	// receives button from the elevator keyboard and sends them to the master
 	sendChan := make(chan config.ButtonMessage)
 	btnChan := make(chan elevio.ButtonEvent)
 	go bcast.Transmitter(config.Port,sendChan)
@@ -62,6 +66,7 @@ func buttonSender(){
 	for {
 		select {
 		case btnEvent := <- btnChan:
+			// if its RECEIVED then it must be received by the master
 			sendChan <- config.ButtonMessage{
 				ButtonEvent: btnEvent,
 				ElevatorID: worldView.ElevatorID,
@@ -73,7 +78,7 @@ func buttonSender(){
 
 func elevatorListener(elevatorCh chan config.Elevator){
 
-
+	// updates the worldview for the elevator
 	for {
 		select {
 		case e := <- elevatorCh:
@@ -85,13 +90,17 @@ func elevatorListener(elevatorCh chan config.Elevator){
 }
 
 func bcastListener(){
+
+	// receives worldviews from other elevators
 	receiveChan := make(chan config.WorldView)
 	elUpdateChan := make(chan config.ElevatorUpdate)
 	go bcast.Receiver(config.Port, receiveChan)
 
-
 	var received [config.N_ELEVATORS] bool
 
+	worldViewChan := make (chan config.WorldView)
+	quitChan := make(chan bool)
+	// 
 	for {
 		start := time.Now()
 		masterFound := false
@@ -118,13 +127,20 @@ func bcastListener(){
 
 				}
 
+				if wv.Role == worldView.Role && wv.ElevatorID < worldView.ElevatorID{
+					if worldView.Role == config.MASTER {
+						quitChan <- true
+					}
+					worldView.Role = config.SLAVE
+					fmt.Println("Going back to SLAVE")
+				}
+
 				if wv.Role == config.MASTER {
 					masterFound = true
 				}
 				if wv.Role == config.BACKUP {
 					backupFound = true
 				}
-
 
 
 				received[wv.ElevatorID] = true
@@ -152,7 +168,7 @@ func bcastListener(){
 		if worldView.Role == config.BACKUP && !masterFound {
 			fmt.Println("No MASTER found, BACKUP becoming MASTER")
 			worldView.Role = config.MASTER
-			go RunMaster(elUpdateChan)
+			go RunMaster(elUpdateChan, worldViewChan, quitChan)
 			for i := 0 ; i<config.N_ELEVATORS;i++{
 				aliveMutex.Lock()
 				elUpdateChan <- config.ElevatorUpdate{i,alive[i]}
@@ -161,6 +177,9 @@ func bcastListener(){
 		} else if worldView.Role == config.SLAVE && !backupFound {
 			fmt.Println("No BACKUP found, SLAVE becoming BACKUP")
 			worldView.Role = config.BACKUP
+		}
+		if worldView.Role == config.MASTER {
+			worldViewChan <- worldView
 		}
 		wvMutex.Unlock()
 
