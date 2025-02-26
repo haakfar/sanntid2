@@ -17,6 +17,7 @@ func GetElevator() config.Elevator {
 	return elevator
 }
 
+/*
 func setAllLights(e config.Elevator) {
 	for floor := 0; floor < config.N_FLOORS; floor++ {
 		for btn := 0; btn < config.N_BUTTONS; btn++ {
@@ -25,6 +26,8 @@ func setAllLights(e config.Elevator) {
 		}
 	}
 }
+
+*/
 
 func FsmOnInitBetweenFloors() {
 	elevio.SetMotorDirection(elevio.MD_Down)
@@ -60,7 +63,7 @@ func FsmOnRequestButtonPress(btnFloor int, btnType int) {
 		case config.EB_Idle:
 		}
 	}
-	setAllLights(elevator)
+	//setAllLights(elevator)
 	//fmt.Println("\nNew state:")
 	//ElevatorPrint(elevator)
 }
@@ -78,7 +81,7 @@ func FsmOnFloorArrival(newFloor int) {
 			elevio.SetDoorOpenLamp(true)
 			elevator = requestsClearAtCurrentFloor(elevator)
 			TimerStart(config.DOOR_OPEN_DURATION)
-			setAllLights(elevator)
+			//setAllLights(elevator)
 			elevator.Behaviour = config.EB_DoorOpen
 		}
 	}
@@ -100,7 +103,7 @@ func FsmOnDoorTimeout() {
 		case config.EB_DoorOpen:
 			TimerStart(config.DOOR_OPEN_DURATION)
 			elevator = requestsClearAtCurrentFloor(elevator)
-			setAllLights(elevator)
+			//setAllLights(elevator)
 		case config.EB_Moving, config.EB_Idle:
 			elevio.SetDoorOpenLamp(false)
 			elevio.SetMotorDirection(elevator.Dirn)

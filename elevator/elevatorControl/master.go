@@ -9,8 +9,8 @@ import (
 	"sync"
 )
 
-var alive [config.N_ELEVATORS] bool
-var aliveMu sync.Mutex
+var active [config.N_ELEVATORS] bool
+var activeMu sync.Mutex
 
 func RunMaster(updateChan chan config.ElevatorUpdate){
 	receiveChan := make(chan config.ButtonMessage)
@@ -30,11 +30,11 @@ func RunMaster(updateChan chan config.ElevatorUpdate){
 				} else {
 					// for now its assigned randomly
 					btnMsg.ElevatorID = rand.Intn(3)
-					aliveMu.Lock()
-					for alive[btnMsg.ElevatorID] == false {
+					activeMu.Lock()
+					for active[btnMsg.ElevatorID] == false {
 						btnMsg.ElevatorID = rand.Intn(3)
 					}
-					aliveMu.Unlock()
+					activeMu.Unlock()
 					btnMsg.MessageType = config.SENT
 					sendChan <- btnMsg
 					fmt.Println("Assigned hall call to", btnMsg.ElevatorID)
@@ -52,9 +52,9 @@ func detectElevators(updateChan chan config.ElevatorUpdate){
 	for {
 		select {
 		case update := <- updateChan:
-			aliveMu.Lock()
-			alive[update.ElevatorID] = update.Alive
-			aliveMu.Unlock()
+			activeMu.Lock()
+			active[update.ElevatorID] = update.Alive
+			activeMu.Unlock()
 		}
 	}
 }
