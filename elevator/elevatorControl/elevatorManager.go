@@ -16,11 +16,12 @@ var alive [config.N_ELEVATORS] bool
 var aliveMutex sync.Mutex
 
 func StartManager(elevatorID int){
-	
+
+	// start elevator
     elevio.Init("localhost:15657", config.N_FLOORS)
 
+	
 	elevatorCh := make(chan config.Elevator)
-
 
 	btnCh := make(chan elevio.ButtonEvent)
 
@@ -32,48 +33,11 @@ func StartManager(elevatorID int){
 	go elevatorListener(elevatorCh)
 	go bcastSender()
 	go bcastListener()
-	go buttonSender()
-	go buttonListener(btnCh)
+	go ButtonSender()
+	go ButtonListener(btnCh)
 
 	select {}
 
-}
-
-func buttonListener(btnCh chan elevio.ButtonEvent){
-
-	// receives button broadcasts and sends them to the elevator
-	receiveChan := make(chan config.ButtonMessage)
-	go bcast.Receiver(config.Port,receiveChan)
-
-	for {
-		select {
-		case btnMsg := <- receiveChan:
-			// if its SENT then its sent by the master
-			if btnMsg.MessageType == config.SENT && btnMsg.ElevatorID == worldView.ElevatorID {
-				btnCh <- btnMsg.ButtonEvent
-			}
-		}
-	}
-}
-
-func buttonSender(){
-
-	// receives button from the elevator keyboard and sends them to the master
-	sendChan := make(chan config.ButtonMessage)
-	btnChan := make(chan elevio.ButtonEvent)
-	go bcast.Transmitter(config.Port,sendChan)
-	go elevio.PollButtons(btnChan)
-	for {
-		select {
-		case btnEvent := <- btnChan:
-			// if its RECEIVED then it must be received by the master
-			sendChan <- config.ButtonMessage{
-				ButtonEvent: btnEvent,
-				ElevatorID: worldView.ElevatorID,
-				MessageType: config.RECEIVED,
-			}
-		}
-	}
 }
 
 func elevatorListener(elevatorCh chan config.Elevator){
@@ -100,8 +64,8 @@ func bcastListener(){
 
 	worldViewChan := make (chan config.WorldView)
 	quitChan := make(chan bool)
-	// 
 	for {
+
 		start := time.Now()
 		masterFound := false
 		backupFound := false
@@ -112,12 +76,11 @@ func bcastListener(){
 
 
 		for time.Since(start) < time.Second {
+			// listen to broadcasts for 1 second
 			select {
 			case wv := <- receiveChan:
 
-				//fmt.Printf("Received: ")
-				//fmt.Println(wv.ElevatorID)
-
+				// updates other elevators
 				for i:=0; i<config.N_ELEVATORS; i++ {
 					if i!=worldView.ElevatorID {
 						wvMutex.Lock()
@@ -127,13 +90,19 @@ func bcastListener(){
 
 				}
 
+				// if we are master or backup and theres another one with lower id, we became slaves
+
 				if wv.Role == worldView.Role && wv.ElevatorID < worldView.ElevatorID{
+
+					// if we are master we stop the master.go file
 					if worldView.Role == config.MASTER {
 						quitChan <- true
 					}
 					worldView.Role = config.SLAVE
 					fmt.Println("Going back to SLAVE")
 				}
+
+				// check if master/backup are alive
 
 				if wv.Role == config.MASTER {
 					masterFound = true
@@ -147,6 +116,8 @@ func bcastListener(){
 
 			}
 		}
+
+		// update which elevators are alive
 		for i := 0 ; i< config.N_ELEVATORS; i++{
 			aliveMutex.Lock()
 			if alive[i] != received[i] {
@@ -165,25 +136,36 @@ func bcastListener(){
 			aliveMutex.Unlock()
 		}
 		wvMutex.Lock()
+
+		// if I'm backup and theres no master become master
 		if worldView.Role == config.BACKUP && !masterFound {
 			fmt.Println("No MASTER found, BACKUP becoming MASTER")
 			worldView.Role = config.MASTER
+
+			// strt master file 
 			go RunMaster(elUpdateChan, worldViewChan, quitChan)
+
+			// update elevators status for master
 			for i := 0 ; i<config.N_ELEVATORS;i++{
 				aliveMutex.Lock()
 				elUpdateChan <- config.ElevatorUpdate{i,alive[i]}
 				aliveMutex.Unlock()
 			}
+
+			// if I'm slave and theres no backup become backup
 		} else if worldView.Role == config.SLAVE && !backupFound {
 			fmt.Println("No BACKUP found, SLAVE becoming BACKUP")
 			worldView.Role = config.BACKUP
 		}
+
+		// if I'm master send worldView to master.go
 		if worldView.Role == config.MASTER {
 			worldViewChan <- worldView
 		}
+
 		wvMutex.Unlock()
 
-
+		// update lights every second
 		updateLights()
 
 	}
@@ -192,8 +174,11 @@ func bcastListener(){
 func updateLights(){
 	for floor := 0; floor < config.N_FLOORS; floor++ {
 
+		// if theres a hall call on floor light up
 		elevio.SetButtonLamp(elevio.BT_HallUp, floor, callOnFloor(floor, elevio.BT_HallUp))
 		elevio.SetButtonLamp(elevio.BT_HallDown, floor, callOnFloor(floor, elevio.BT_HallDown))
+
+		// light cab call 
 		wvMutex.Lock()
 		elevio.SetButtonLamp(elevio.BT_Cab, floor, worldView.Elevators[worldView.ElevatorID].Requests[floor][elevio.BT_Cab])
 		wvMutex.Unlock()
@@ -201,8 +186,8 @@ func updateLights(){
 }
 
 func callOnFloor(floor int, call elevio.ButtonType) bool {
-	//fmt.Println(len(worldView.Elevators))
-	//fmt.Println(worldView.Elevators)
+	// for every elevator alive check if theres a call on floor
+
 	for el := 0; el < config.N_ELEVATORS; el++{
 		aliveMutex.Lock()
 		if !alive[el] {
@@ -210,20 +195,20 @@ func callOnFloor(floor int, call elevio.ButtonType) bool {
 			continue
 		}
 		aliveMutex.Unlock()
-		//fmt.Println(el)
 		wvMutex.Lock()
 		if worldView.Elevators[el].Requests[floor][call] {
 			wvMutex.Unlock()
 			return true
 		}
 		wvMutex.Unlock()
-		//fmt.Println(el)
 	}
 	return false
 }
 
 
 func bcastSender(){
+
+	// broadcast worldView every 200ms 
 	sendChan := make(chan config.WorldView)
 	go bcast.Transmitter(config.Port, sendChan)
 	for {

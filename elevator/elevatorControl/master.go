@@ -21,15 +21,17 @@ func RunMaster(updateChan chan config.ElevatorUpdate, worldViewChan chan config.
 	go wvUpdater(worldViewChan, quitChan)
 
 	for {
+		// every time a button is pressed its sent to the master
 		select {
 		case btnMsg := <- receiveChan:
 			if btnMsg.MessageType == config.RECEIVED {
+				// if its a cab call its assigned to the elevator
 				if btnMsg.ButtonEvent.Button == elevio.BT_Cab {
 					btnMsg.MessageType = config.SENT
 					sendChan <- btnMsg
 					fmt.Println("Assigned cab call to", btnMsg.ElevatorID)
 				} else {
-					// for now its assigned randomly
+					// if its a hall call is assiged to a suitable elevator
 					btnMsg.ElevatorID = assign()
 					btnMsg.MessageType = config.SENT
 					sendChan <- btnMsg
@@ -43,6 +45,12 @@ func RunMaster(updateChan chan config.ElevatorUpdate, worldViewChan chan config.
 }
 
 func assign() int {
+	/* honestly I forgot how this works but I think it calculates time for each elevator 
+	by adding the difference between the top and bottom destinations of the elevator and 
+	the distance between the elevator position and the top or bottom destination (we pick the biggest distance)
+	and the assigned elevator is the one with the lowest time
+	It's not the best but should work decently
+	*/
 	minTime := -1
 	minEl := -1
 	for el := 0; el < config.N_ELEVATORS; el++ {
@@ -75,6 +83,8 @@ func calcTime(elevatorID int) int {
 	return (topDest-bottomDest)+max(abs(topDest-worldView.Elevators[elevatorID].Floor),abs(bottomDest-worldView.Elevators[elevatorID].Floor))
 }
 
+// go functions for abs and max only work for float for some reason
+// or maybe I'm just stupid
 func abs(n int) int {
 	if n < 0 {return -n}
 	return n
@@ -107,6 +117,7 @@ func getBottomDestination(elevatorID int) int {
 	return -1
 }
 
+// this updates which elevators are alive and which arent
 func detectElevators(updateChan chan config.ElevatorUpdate, quitChan chan bool){
 	for {
 		select {
@@ -120,6 +131,7 @@ func detectElevators(updateChan chan config.ElevatorUpdate, quitChan chan bool){
 	}
 }
 
+// this updates the worldview
 func wvUpdater(worldViewChan chan config.WorldView, quitChan chan bool){
 	for {
 		select {
