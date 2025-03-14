@@ -5,12 +5,6 @@ import (
 )
 
 const (
-	STAND_STILL Direction = iota
-	GOING_UP
-	GOING_DOWN
-)
-
-const (
 	SLAVE Role = iota
 	BACKUP
 	MASTER
@@ -51,15 +45,11 @@ type WorldView struct {
 	Elevators [N_ELEVATORS]Elevator
 	ElevatorID int
 	Role Role
+	Alive [N_ELEVATORS]bool
 }
 
 type ButtonMessage struct {
 	ButtonEvent elevio.ButtonEvent
 	ElevatorID int
 	MessageType MessageType
-}
-
-type ElevatorUpdate struct {
-	ElevatorID int
-	Alive bool
 }

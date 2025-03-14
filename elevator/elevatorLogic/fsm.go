@@ -94,6 +94,10 @@ func FsmOnDoorTimeout() {
 	//fmt.Println("\n\nFsmOnDoorTimeout()")
 	//ElevatorPrint(elevator)
 
+	if elevio.GetObstruction() {
+		TimerStart(config.DOOR_OPEN_DURATION)
+		return
+	}
 	if elevator.Behaviour == config.EB_DoorOpen {
 		pair := requestsChooseDirection(elevator)
 		elevator.Dirn = pair.Dirn

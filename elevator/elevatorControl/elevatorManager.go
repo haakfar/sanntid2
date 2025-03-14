@@ -8,17 +8,16 @@ import (
 	"Config/config"
 	"time"
 	"Driver-go/elevio"
+	"strconv"
 )
 
-var	wvMutex sync.Mutex
-var worldView config.WorldView
-var alive [config.N_ELEVATORS] bool
-var aliveMutex sync.Mutex
+var	WorldViewMutex sync.Mutex
+var WorldView config.WorldView
 
-func StartManager(elevatorID int){
-
+func StartManager(elevatorID int, portNumber int) {
+	var portNumberString string = strconv.Itoa(portNumber)
 	// start elevator
-    elevio.Init("localhost:15657", config.N_FLOORS)
+	elevio.Init("localhost:"+portNumberString, config.N_FLOORS)
 
 	
 	elevatorCh := make(chan config.Elevator)
@@ -27,9 +26,10 @@ func StartManager(elevatorID int){
 
 	go elevatorLogic.StartElevator(btnCh, elevatorCh)
 
-	worldView.ElevatorID = elevatorID
-	worldView.Role = config.SLAVE
-
+	WorldView.ElevatorID = elevatorID
+	WorldView.Role = config.SLAVE
+	WorldView.Alive[elevatorID]=true    
+	WorldView.Elevators[elevatorID] = elevatorLogic.GetElevator()
 	go elevatorListener(elevatorCh)
 	go bcastSender()
 	go bcastListener()
@@ -46,9 +46,9 @@ func elevatorListener(elevatorCh chan config.Elevator){
 	for {
 		select {
 		case e := <- elevatorCh:
-			wvMutex.Lock()
-			worldView.Elevators[worldView.ElevatorID] = e
-			wvMutex.Unlock()
+			WorldViewMutex.Lock()
+			WorldView.Elevators[WorldView.ElevatorID] = e
+			WorldViewMutex.Unlock()
 		}
 	}
 }
@@ -57,12 +57,12 @@ func bcastListener(){
 
 	// receives worldviews from other elevators
 	receiveChan := make(chan config.WorldView)
-	elUpdateChan := make(chan config.ElevatorUpdate)
+	//elUpdateChan := make(chan config.ElevatorUpdate)
 	go bcast.Receiver(config.Port, receiveChan)
 
 	var received [config.N_ELEVATORS] bool
 
-	worldViewChan := make (chan config.WorldView)
+	//worldViewChan := make (chan config.WorldView)
 	quitChan := make(chan bool)
 	for {
 
@@ -82,23 +82,23 @@ func bcastListener(){
 
 				// updates other elevators
 				for i:=0; i<config.N_ELEVATORS; i++ {
-					if i!=worldView.ElevatorID {
-						wvMutex.Lock()
-						worldView.Elevators[i]=wv.Elevators[i]
-						wvMutex.Unlock()
+					if i!=WorldView.ElevatorID {
+						WorldViewMutex.Lock()
+						WorldView.Elevators[i]=wv.Elevators[i]
+						WorldViewMutex.Unlock()
 					}
 
 				}
 
 				// if we are master or backup and theres another one with lower id, we became slaves
 
-				if wv.Role == worldView.Role && wv.ElevatorID < worldView.ElevatorID{
+				if wv.Role == WorldView.Role && wv.ElevatorID < WorldView.ElevatorID{
 
 					// if we are master we stop the master.go file
-					if worldView.Role == config.MASTER {
+					if WorldView.Role == config.MASTER {
 						quitChan <- true
 					}
-					worldView.Role = config.SLAVE
+					WorldView.Role = config.SLAVE
 					fmt.Println("Going back to SLAVE")
 				}
 
@@ -119,69 +119,38 @@ func bcastListener(){
 
 		// update which elevators are alive
 		for i := 0 ; i< config.N_ELEVATORS; i++{
-			aliveMutex.Lock()
-			if alive[i] != received[i] {
-				alive[i] = received[i] 
-				if alive[i] == true {
+			WorldViewMutex.Lock()
+			if WorldView.Alive[i] != received[i] {
+				WorldView.Alive[i] = received[i] 
+				if WorldView.Alive[i] == true {
 					fmt.Printf("Elevator %d now alive\n", i)
 				} else {
 					fmt.Printf("Elevator %d now dead\n", i)
 				}
-				wvMutex.Lock()
-				if (worldView.Role == config.MASTER){
-					elUpdateChan <- config.ElevatorUpdate{i,alive[i]}
-				}
-				wvMutex.Unlock()
 			}
-			aliveMutex.Unlock()
+			WorldViewMutex.Unlock()
 		}
-		wvMutex.Lock()
+		WorldViewMutex.Lock()
 
 		// if I'm backup and theres no master become master
-		if worldView.Role == config.BACKUP && !masterFound {
+		if WorldView.Role == config.BACKUP && !masterFound {
 			fmt.Println("No MASTER found, BACKUP becoming MASTER")
-			worldView.Role = config.MASTER
+			WorldView.Role = config.MASTER
 
 			// strt master file 
-			go RunMaster(elUpdateChan, worldViewChan, quitChan)
-
-			// update elevators status for master
-			for i := 0 ; i<config.N_ELEVATORS;i++{
-				aliveMutex.Lock()
-				elUpdateChan <- config.ElevatorUpdate{i,alive[i]}
-				aliveMutex.Unlock()
-			}
+			go RunMaster(quitChan)
 
 			// if I'm slave and theres no backup become backup
-		} else if worldView.Role == config.SLAVE && !backupFound {
+		} else if WorldView.Role == config.SLAVE && !backupFound {
 			fmt.Println("No BACKUP found, SLAVE becoming BACKUP")
-			worldView.Role = config.BACKUP
+			WorldView.Role = config.BACKUP
 		}
 
-		// if I'm master send worldView to master.go
-		if worldView.Role == config.MASTER {
-			worldViewChan <- worldView
-		}
-
-		wvMutex.Unlock()
+		WorldViewMutex.Unlock()
 
 		// update lights every second
-		updateLights()
+		UpdateLights()
 
-	}
-}
-
-func updateLights(){
-	for floor := 0; floor < config.N_FLOORS; floor++ {
-
-		// if theres a hall call on floor light up
-		elevio.SetButtonLamp(elevio.BT_HallUp, floor, callOnFloor(floor, elevio.BT_HallUp))
-		elevio.SetButtonLamp(elevio.BT_HallDown, floor, callOnFloor(floor, elevio.BT_HallDown))
-
-		// light cab call 
-		wvMutex.Lock()
-		elevio.SetButtonLamp(elevio.BT_Cab, floor, worldView.Elevators[worldView.ElevatorID].Requests[floor][elevio.BT_Cab])
-		wvMutex.Unlock()
 	}
 }
 
@@ -189,18 +158,21 @@ func callOnFloor(floor int, call elevio.ButtonType) bool {
 	// for every elevator alive check if theres a call on floor
 
 	for el := 0; el < config.N_ELEVATORS; el++{
-		aliveMutex.Lock()
-		if !alive[el] {
-			aliveMutex.Unlock()
+		//fmt.Println(el)
+		WorldViewMutex.Lock()
+		//fmt.Println("A")
+		if !WorldView.Alive[el] {
+			WorldViewMutex.Unlock()
 			continue
 		}
-		aliveMutex.Unlock()
-		wvMutex.Lock()
-		if worldView.Elevators[el].Requests[floor][call] {
-			wvMutex.Unlock()
+		//fmt.Println("B")
+		WorldViewMutex.Unlock()
+		WorldViewMutex.Lock()
+		if WorldView.Elevators[el].Requests[floor][call] {
+			WorldViewMutex.Unlock()
 			return true
 		}
-		wvMutex.Unlock()
+		WorldViewMutex.Unlock()
 	}
 	return false
 }
@@ -208,13 +180,13 @@ func callOnFloor(floor int, call elevio.ButtonType) bool {
 
 func bcastSender(){
 
-	// broadcast worldView every 200ms 
+	// broadcast WorldView every 200ms 
 	sendChan := make(chan config.WorldView)
 	go bcast.Transmitter(config.Port, sendChan)
 	for {
-		wvMutex.Lock()
-		sendChan <- worldView
-		wvMutex.Unlock()
+		WorldViewMutex.Lock()
+		sendChan <- WorldView
+		WorldViewMutex.Unlock()
 		time.Sleep(200 * time.Millisecond)
 	}
 }

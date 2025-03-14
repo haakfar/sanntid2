@@ -4,6 +4,7 @@ import (
 	"Config/config"
 	"Network-go/network/bcast"
 	"Driver-go/elevio"
+	//"fmt"
 )
 
 func ButtonListener(btnCh chan elevio.ButtonEvent){
@@ -16,8 +17,9 @@ func ButtonListener(btnCh chan elevio.ButtonEvent){
 		select {
 		case btnMsg := <- receiveChan:
 			// if its SENT then its sent by the master
-			if btnMsg.MessageType == config.SENT && btnMsg.ElevatorID == worldView.ElevatorID {
+			if btnMsg.MessageType == config.SENT && btnMsg.ElevatorID == WorldView.ElevatorID {
 				btnCh <- btnMsg.ButtonEvent
+				//fmt.Println("Elevator ", WorldView.ElevatorID, " received")
 			}
 		}
 	}
@@ -37,7 +39,7 @@ func ButtonSender(){
 			// if its RECEIVED then it must be received by the master
 			sendChan <- config.ButtonMessage{
 				ButtonEvent: btnEvent,
-				ElevatorID: worldView.ElevatorID,
+				ElevatorID: WorldView.ElevatorID,
 				MessageType: config.RECEIVED,
 			}
 		}
