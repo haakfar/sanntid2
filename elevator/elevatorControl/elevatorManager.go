@@ -26,14 +26,17 @@ func StartManager(elevatorID int, portNumber int) {
 
 	go elevatorLogic.StartElevator(btnCh, elevatorCh)
 
+	btnReassignChan := make(chan config.ButtonMessage)
+
 	WorldView.ElevatorID = elevatorID
 	WorldView.Role = config.SLAVE
 	WorldView.Alive[elevatorID]=true    
 	WorldView.Elevators[elevatorID] = elevatorLogic.GetElevator()
+
 	go elevatorListener(elevatorCh)
 	go bcastSender()
-	go bcastListener()
-	go ButtonSender()
+	go bcastListener(btnReassignChan)
+	go ButtonSender(btnReassignChan)
 	go ButtonListener(btnCh)
 
 	select {}
@@ -53,7 +56,9 @@ func elevatorListener(elevatorCh chan config.Elevator){
 	}
 }
 
-func bcastListener(){
+func bcastListener(btnReassignChan chan config.ButtonMessage){
+
+	var deadCabCalls [config.N_ELEVATORS][config.N_FLOORS]bool
 
 	// receives worldviews from other elevators
 	receiveChan := make(chan config.WorldView)
@@ -82,7 +87,7 @@ func bcastListener(){
 
 				// updates other elevators
 				for i:=0; i<config.N_ELEVATORS; i++ {
-					if i!=WorldView.ElevatorID {
+					if i!=WorldView.ElevatorID{
 						WorldViewMutex.Lock()
 						WorldView.Elevators[i]=wv.Elevators[i]
 						WorldViewMutex.Unlock()
@@ -124,8 +129,47 @@ func bcastListener(){
 				WorldView.Alive[i] = received[i] 
 				if WorldView.Alive[i] == true {
 					fmt.Printf("Elevator %d now alive\n", i)
+					// if an elevator comes back alive, we must reassign its cab calls
+					for floor := 0; floor < config.N_FLOORS; floor ++ {
+						if deadCabCalls[i][floor] {
+							fmt.Println("Reassinging ", floor, elevio.BT_Cab)
+							deadCabCalls[i][floor] = false
+							btnReassignChan <- config.ButtonMessage{
+								ButtonEvent: elevio.ButtonEvent{
+									Floor: floor,
+									Button: elevio.BT_Cab,
+								},
+								ElevatorID: i,
+								MessageType: config.RECEIVED,
+							}
+						}
+					}	
 				} else {
 					fmt.Printf("Elevator %d now dead\n", i)
+					// if an elevator dies, we must reassign his hall calls 
+					for floor := 0; floor < config.N_FLOORS; floor ++ {
+						for btn := 0; btn < config.N_BUTTONS-1; btn ++ {
+							if WorldView.Elevators[i].Requests[floor][btn] {
+								fmt.Println("Reassinging ", floor, btn)
+								btnReassignChan <- config.ButtonMessage{
+									ButtonEvent: elevio.ButtonEvent{ // Corretto l'inizializzazione di ButtonEvent
+										Floor:  floor,
+										Button: elevio.ButtonType(btn),
+									},
+									ElevatorID:  WorldView.ElevatorID, // Corretto l'uso del segno `=`, deve essere `:`
+									MessageType: config.RECEIVED,
+								}
+							}
+						}
+
+						// we must also save his cab calls so that they can be reassigned to it when it comes back
+
+						if WorldView.Elevators[i].Requests[floor][elevio.BT_Cab] {
+							deadCabCalls[i][floor]=true
+						}
+
+
+					}
 				}
 			}
 			WorldViewMutex.Unlock()

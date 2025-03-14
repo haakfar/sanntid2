@@ -26,7 +26,7 @@ func ButtonListener(btnCh chan elevio.ButtonEvent){
 }
 
 
-func ButtonSender(){
+func ButtonSender(btnReassignChan chan config.ButtonMessage){
 
 	// receives button from the elevator keyboard and sends them to the master
 	sendChan := make(chan config.ButtonMessage)
@@ -40,6 +40,13 @@ func ButtonSender(){
 			sendChan <- config.ButtonMessage{
 				ButtonEvent: btnEvent,
 				ElevatorID: WorldView.ElevatorID,
+				MessageType: config.RECEIVED,
+			}
+		case btnMsg := <- btnReassignChan:
+			// reassign calls from dead elevators
+			sendChan <- config.ButtonMessage{
+				ButtonEvent: btnMsg.ButtonEvent,
+				ElevatorID: btnMsg.ElevatorID,
 				MessageType: config.RECEIVED,
 			}
 		}
