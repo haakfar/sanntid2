@@ -7,39 +7,76 @@ import (
 	"fmt"
 )
 
-var exit bool
-
+// This function manages the "master stuff"
 func RunMaster(quitChan chan bool){
+
+	// Channels and functions to receive and send button presses
 	receiveChan := make(chan config.ButtonMessage)
 	sendChan := make(chan config.ButtonMessage)
-	go bcast.Receiver(config.Port, receiveChan)
-	go bcast.Transmitter(config.Port, sendChan)
+	go bcast.Receiver(config.ElevatorToMasterPort, receiveChan)
+	go bcast.Transmitter(config.MasterToElevatorPort, sendChan)
 
 	for {
-		// every time a button is pressed its sent to the master
+		// Every time a button is pressed its sent to the master
 		select {
 		case btnMsg := <- receiveChan:
-			if btnMsg.MessageType == config.RECEIVED {
-				// if its a cab call its assigned to the elevator
-				if btnMsg.ButtonEvent.Button == elevio.BT_Cab {
-					btnMsg.MessageType = config.SENT
-					sendChan <- btnMsg
-					fmt.Println("Assigned cab call to", btnMsg.ElevatorID)
-				} else {
-					// if its a hall call is assiged to a suitable elevator
-					btnMsg.ElevatorID = assign(btnMsg.ButtonEvent)
-					btnMsg.MessageType = config.SENT
-					sendChan <- btnMsg
-					fmt.Println("Assigned hall call to", btnMsg.ElevatorID)
-				}
+			// If the call is already assigned we ignore it
+			if callAlreadyAssigned(btnMsg) {
+				break
+			}
+
+			if btnMsg.ButtonEvent.Button == elevio.BT_Cab {
+				// If its a cab call its assigned to the elevator that sent it
+				sendChan <- btnMsg
+				fmt.Println("Assigned cab call to", btnMsg.ElevatorID)
+
+			} else {
+
+				// If its a hall call its assiged to an elevator based on that the assigner says
+				btnMsg.ElevatorID = assign(btnMsg.ButtonEvent)
+				sendChan <- btnMsg					
+				fmt.Println("Assigned hall call to", btnMsg.ElevatorID)
 			}
 		case <- quitChan:
-			exit = true
 			return
 		}
 	}
 }
 
+// This function checks if the call is already assigned.
+func callAlreadyAssigned(btnMsg config.ButtonMessage) bool {
+
+	alreadyAssigned := false
+
+	// For cab calls we check if its assigned to the elevator that sent it
+	if btnMsg.ButtonEvent.Button == elevio.BT_Cab {
+
+		WorldViewMutex.Lock()
+		if WorldView.Elevators[btnMsg.ElevatorID].Requests[btnMsg.ButtonEvent.Floor][btnMsg.ButtonEvent.Button] {
+			alreadyAssigned = true
+		}
+		WorldViewMutex.Unlock()
+
+
+	} else {
+
+		// For hall calls we check if its assigned to any elevator
+		for el := 0; el<config.N_ELEVATORS; el++{
+			WorldViewMutex.Lock()
+			if WorldView.Alive[el] && WorldView.Elevators[el].Requests[btnMsg.ButtonEvent.Floor][btnMsg.ButtonEvent.Button] {
+				alreadyAssigned = true
+			}
+			WorldViewMutex.Unlock()
+			if alreadyAssigned {
+				break
+			}
+		}
+	}
+	return alreadyAssigned
+}
+
+// This is the assigner, very messy but it seems to work fine
+// We try to calculate the time that each elevator would take to serve that call and in the end we assign the call to the elevator with the lowest time
 func assign(btnEvent elevio.ButtonEvent) int {
 	minTime := -1.0
 	minEl := -1
@@ -61,10 +98,8 @@ func assign(btnEvent elevio.ButtonEvent) int {
 			WorldViewMutex.Unlock()
 		}
 	}
-	//fmt.Println("Assigning to ",minEl)
 	return minEl
 }
-
 // here we try to simulate how much time it takes for the elevator to serve that call (2.5 seconds to move between floors, 3 seconds when stopping at the floor)
 // I tried it quite a lot and it seems to not crash anymore
 func calcTime(elevator config.Elevator, btnEvent elevio.ButtonEvent) float64 {
@@ -95,11 +130,12 @@ func calcTime(elevator config.Elevator, btnEvent elevio.ButtonEvent) float64 {
 	elevSim.Requests[btnEvent.Floor][btnEvent.Button] = true
 	time := 0.0
 	for {
-		// we get currentTop and bottom Destination
+
+		// We get currentTop and bottom Destination
 		topDest := getTopDestination(elevSim)
 		bottomDest := getBottomDestination(elevSim)
 
-		// if we are at a floor and one of those conditions is true we can stop
+		// If we are at a floor and one of those conditions is true we can stop
 		if elevSim.Floor == btnEvent.Floor {
 			if btnEvent.Button == elevio.BT_Cab || (elevSim.Dirn == elevio.MD_Up && btnEvent.Button == elevio.BT_HallUp) || (elevSim.Dirn == elevio.MD_Down && btnEvent.Button == elevio.BT_HallDown) || btnEvent.Floor == topDest || btnEvent.Floor == bottomDest || topDest == bottomDest{
 				
@@ -107,7 +143,7 @@ func calcTime(elevator config.Elevator, btnEvent elevio.ButtonEvent) float64 {
 			} 
 		}
 
-		// if we are stoppoing at this floor we have served the request and must wait 3 seconds
+		// If we are stopping at this floor we have served the request and must wait 3 seconds
 		if elevSim.Requests[elevSim.Floor][elevio.BT_Cab] {
 			time+=3
 			elevSim.Requests[elevSim.Floor][elevio.BT_Cab]=false
@@ -121,14 +157,14 @@ func calcTime(elevator config.Elevator, btnEvent elevio.ButtonEvent) float64 {
 			elevSim.Requests[elevSim.Floor][elevio.BT_HallDown]=false
 		}
 
-		// if we reached the top or the bottom we have to change direction
+		// If we reached the top or the bottom we have to change direction
 		if elevSim.Floor >= topDest || elevSim.Floor == 3 {
 			elevSim.Dirn = elevio.MD_Down
 		} else if elevSim.Floor <= bottomDest || elevSim.Floor == 0 {
 			elevSim.Dirn = elevio.MD_Up
 		}
 
-		// we move floors according to the direction (it takes 2.5 seconds)
+		// We move floors according to the direction (it takes about 2.5 seconds)
 		if elevSim.Dirn == elevio.MD_Up {
 			time+=2.5
 			elevSim.Floor++
@@ -139,11 +175,13 @@ func calcTime(elevator config.Elevator, btnEvent elevio.ButtonEvent) float64 {
 	}
 }
 
+// Abs function since GO wants floats and I don't want to cast type
 func abs(n int) int {
 	if n < 0 {return -n}
 	return n
 }
 
+// Function to get the current top destination of the elevator
 func getTopDestination(elevator config.Elevator) int {
 	for floor := config.N_FLOORS-1; floor>=0; floor--{
 		for btn := 0; btn<config.N_BUTTONS; btn++{
@@ -152,9 +190,12 @@ func getTopDestination(elevator config.Elevator) int {
 			}
 		}
 	}
+
+	// If no calls are found we assume top destination = top floor
 	return 3
 }
 
+// Function to get the current bottom destination of the elevator
 func getBottomDestination(elevator config.Elevator) int {
 	for floor := 0; floor< config.N_FLOORS; floor++{
 		for btn := 0; btn< config.N_BUTTONS; btn++{
@@ -163,16 +204,6 @@ func getBottomDestination(elevator config.Elevator) int {
 			}
 		}
 	}
+	// If no calls are found we assume bottom destination = bottom floor
 	return 0
-}
-
-func hasCalls(elevator config.Elevator) bool {
-	for floor := 0; floor< config.N_FLOORS; floor++{
-		for btn := 0; btn< config.N_BUTTONS; btn++{
-			if elevator.Requests[floor][btn]{
-				return true
-			}
-		}
-	}
-	return false
 }
