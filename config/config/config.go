@@ -13,6 +13,8 @@ const DOOR_OPEN_DURATION = 3.0
 const WorldViewPort = 9000
 const MasterToElevatorPort = 9001
 const ElevatorToMasterPort = 9002
+const ElevatorConfPort = 9003
+const MasterConfPort = 9004
 
 // Elevator roles
 

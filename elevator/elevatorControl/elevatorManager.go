@@ -14,6 +14,28 @@ import (
 var	WorldViewMutex sync.Mutex
 var WorldView config.WorldView
 
+// Function to initialize the worldview (gets executed when the program starts)
+func init() {
+	WorldViewMutex.Lock()
+	WorldView.Role = config.SLAVE
+	defer WorldViewMutex.Unlock()
+
+	WorldView = config.WorldView{}
+	for i := 0; i < config.N_ELEVATORS; i++ {
+		requests := make([][]bool, config.N_FLOORS)
+		for j := range requests {
+			requests[j] = make([]bool, config.N_BUTTONS)
+		}
+
+		WorldView.Elevators[i] = config.Elevator{
+			Floor:     0,
+			Dirn:      0,
+			Behaviour: 0,
+			Requests:  requests,
+		}
+	}
+}
+
 func StartManager(elevatorID int, portNumber int) {
 
 
@@ -23,9 +45,7 @@ func StartManager(elevatorID int, portNumber int) {
 
 	// Initializing WorldView
 	WorldView.ElevatorID = elevatorID
-	WorldView.Role = config.SLAVE
 	WorldView.Alive[elevatorID]=true    
-	WorldView.Elevators[elevatorID] = elevatorLogic.GetElevator()
 
 	// The elevator sends updates through this channel to update the world view
 	elevatorCh := make(chan config.Elevator)
@@ -69,6 +89,9 @@ func elevatorListener(elevatorCh chan config.Elevator){
 			WorldViewMutex.Lock()
 			WorldView.Elevators[WorldView.ElevatorID] = e
 			WorldViewMutex.Unlock()
+
+			// We update the lights when our elevator updates
+			UpdateLights()
 		}
 	}
 }
@@ -94,6 +117,8 @@ func bcastListener(btnReassignChan chan config.ButtonMessage){
 
 	for {
 
+		//fmt.Println("Listening")
+
 		// Start the timer
 		start := time.Now()
 
@@ -118,8 +143,15 @@ func bcastListener(btnReassignChan chan config.ButtonMessage){
 				for i:=0; i<config.N_ELEVATORS; i++ {
 					if i!=WorldView.ElevatorID{
 						WorldViewMutex.Lock()
-						WorldView.Elevators[i]=wv.Elevators[i]
-						WorldViewMutex.Unlock()
+
+						// If the elevator changed we update the lights
+						if differentElevator(WorldView.Elevators[i], wv.Elevators[i]) {
+							WorldView.Elevators[i]=wv.Elevators[i]
+							WorldViewMutex.Unlock()
+							UpdateLights()
+						} else {
+							WorldViewMutex.Unlock()
+						}
 					}
 
 				}
@@ -182,13 +214,17 @@ func bcastListener(btnReassignChan chan config.ButtonMessage){
 							fmt.Println("Reassinging ", floor, elevio.BT_Cab)
 							deadCabCalls[i][floor] = false
 
-							btnReassignChan <- config.ButtonMessage{
+							btnMsg := config.ButtonMessage{
 								ButtonEvent: elevio.ButtonEvent{
 									Floor: floor,
 									Button: elevio.BT_Cab,
 								},
 								ElevatorID: i,
 							}
+
+							WorldViewMutex.Unlock()
+							btnReassignChan <- btnMsg
+							WorldViewMutex.Lock()
 						}
 					}	
 				} else {
@@ -204,13 +240,17 @@ func bcastListener(btnReassignChan chan config.ButtonMessage){
 
 								fmt.Println("Reassinging ", floor, btn)
 
-								btnReassignChan <- config.ButtonMessage{
+								btnMsg := config.ButtonMessage{
 									ButtonEvent: elevio.ButtonEvent{
 										Floor:  floor,
 										Button: elevio.ButtonType(btn),
 									},
 									ElevatorID:  WorldView.ElevatorID,
 								}
+								WorldViewMutex.Unlock()
+								btnReassignChan <- btnMsg
+								WorldViewMutex.Lock()
+
 							}
 						}
 
@@ -244,11 +284,19 @@ func bcastListener(btnReassignChan chan config.ButtonMessage){
 
 		WorldViewMutex.Unlock()
 
-		// Finally, update lights every second
-		// TODO find a better way to update lights
-		UpdateLights()
-
 	}
+}
+
+
+// This function checks if an elevator changed from what we have in the world view
+func differentElevator(el1 config.Elevator, el2 config.Elevator) bool {
+	if el1.Floor != el2.Floor || el1.Dirn != el2.Dirn || el1.Behaviour != el2.Behaviour {return true}
+	for floor := 0; floor < config.N_FLOORS; floor++ {
+		for btn := 0; btn < config.N_BUTTONS; btn++ {
+			if el1.Requests[floor][btn] != el2.Requests[floor][btn] {return true}
+		}
+	}
+	return false
 }
 
 // This function broadcasts the world view every 200 ms
