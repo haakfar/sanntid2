@@ -2,16 +2,16 @@ package elevatorControl
 
 import (
 	"Config/config"
-	"Network-go/network/bcast"
 	"Driver-go/elevio"
+	"Network-go/network/bcast"
 	"fmt"
 	"time"
 )
 
 var exit bool
 
-// This function manages the "master stuff"
-func RunMaster(quitChan chan bool){
+// This function manages the "master stuff" (better explained in the function)
+func RunMaster(quitChan chan bool) {
 
 	// Channels and broadcasts to receive button presses and send confirmation
 	receiveChan := make(chan config.ButtonMessage)
@@ -19,14 +19,13 @@ func RunMaster(quitChan chan bool){
 	sendConfChan := make(chan config.ButtonMessage)
 	go bcast.Transmitter(config.MasterConfPort, sendConfChan)
 
-
 	for {
 		// Every time a button is pressed its sent to the master
 		select {
-		case btnMsg := <- receiveChan:
+		case btnMsg := <-receiveChan:
 
 			// We send the confirmation back
-			sendConfChan <- btnMsg
+			//sendConfChan <- btnMsg
 
 			// If the call is already assigned we ignore it
 			if callAlreadyAssigned(btnMsg) {
@@ -49,7 +48,7 @@ func RunMaster(quitChan chan bool){
 			}
 
 		// When an elevator demotes it terminates
-		case <- quitChan:
+		case <-quitChan:
 			exit = true
 			return
 		}
@@ -57,29 +56,36 @@ func RunMaster(quitChan chan bool){
 }
 
 // This function sends the button press to the assigned elevator until a confirmation is received
-func masterSenderUntilConfirmation(btnMsg config.ButtonMessage){
+func masterSenderUntilConfirmation(btnMsg config.ButtonMessage) {
 
 	// Channels and broadcasts to send button presses to the elevator and receive the confirmation
 	sendChan := make(chan config.ButtonMessage)
 	go bcast.Transmitter(config.MasterToElevatorPort, sendChan)
+
+	sendChan <- btnMsg
+
+	return
+	//**********
 	receiveConfChan := make(chan config.ButtonMessage)
 	go bcast.Receiver(config.ElevatorConfPort, receiveConfChan)
 
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(300 * time.Millisecond)
 	defer ticker.Stop()
 
 	// Every second we send the button press until we receive the confirmation from the elevator
 	for {
 		sendChan <- btnMsg
 		select {
-		case confMsg := <- receiveConfChan:
+		case confMsg := <-receiveConfChan:
 			if confMsg == btnMsg {
 				return
 			}
-		case <- ticker.C:
+		case <-ticker.C:
 
 			// If exit is true then the elevator isn't master anymore and must terminate
-			if exit {return}
+			if exit {
+				return
+			}
 
 			// If the assigned elevator is not alive anymore we must terminate (it should be assigned again)
 			WorldViewMutex.Lock()
@@ -108,11 +114,10 @@ func callAlreadyAssigned(btnMsg config.ButtonMessage) bool {
 		}
 		WorldViewMutex.Unlock()
 
-
 	} else {
 
 		// For hall calls we check if its assigned to any elevator
-		for el := 0; el<config.N_ELEVATORS; el++{
+		for el := 0; el < config.N_ELEVATORS; el++ {
 			WorldViewMutex.Lock()
 			if WorldView.Alive[el] && WorldView.Elevators[el].Requests[btnMsg.ButtonEvent.Floor][btnMsg.ButtonEvent.Button] {
 				alreadyAssigned = true
@@ -123,5 +128,6 @@ func callAlreadyAssigned(btnMsg config.ButtonMessage) bool {
 			}
 		}
 	}
+
 	return alreadyAssigned
 }

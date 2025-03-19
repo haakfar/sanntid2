@@ -2,15 +2,16 @@
 package elevatorLogic
 
 import (
-	"fmt"
-	"Driver-go/elevio"
-	"time"
 	"Config/config"
+	"Driver-go/elevio"
+	"fmt"
+	"time"
 )
 
+// Function called when an elevator starts
 func StartElevator(buttonCh chan elevio.ButtonEvent, elevatorCh chan config.Elevator) {
 
-	//receives calls from buttonCh, sends updates when reaches a floor to elevator
+	//Receives calls from buttonCh, sends updates when reaches a floor to elevator
 	fmt.Println("Started!")
 
 	inputPollRate := 25 * time.Millisecond
@@ -29,17 +30,21 @@ func StartElevator(buttonCh chan elevio.ButtonEvent, elevatorCh chan config.Elev
 	ticker := time.NewTicker(inputPollRate)
 	defer ticker.Stop()
 
+	// Sends the elevator to the elevatorManager that updates the world view
 	elevatorCh <- GetElevator()
 
 	for {
 		select {
+		// When a button is pressed the elevator processes it and then updates the world view through elevatorCh
 		case btnEvent := <-buttonCh:
 			FsmOnRequestButtonPress(btnEvent.Floor, int(btnEvent.Button))
 			elevatorCh <- elevator
 		case f := <-floorCh:
+			// When the elevator arrives at a floor it processes it and then updates the world view
 			FsmOnFloorArrival(f)
 			elevatorCh <- elevator
 		case <-ticker.C:
+			// When the timer times out, the elevator processes it and then updates the world view
 			if TimerTimedOut() {
 				TimerStop()
 				FsmOnDoorTimeout()
@@ -48,52 +53,8 @@ func StartElevator(buttonCh chan elevio.ButtonEvent, elevatorCh chan config.Elev
 		}
 	}
 }
-/*
 
-func (eb config.ElevatorBehaviour) String() string {
-	switch eb {
-	case config.EB_Idle:
-		return "EB_Idle"
-	case config.EB_DoorOpen:
-		return "EB_DoorOpen"
-	case config.EB_Moving:
-		return "EB_Moving"
-	default:
-		return "EB_UNDEFINED"
-	}
-}
-
-*/
-
-/*
-
-func ElevatorPrint(e config.Elevator) {
-	fmt.Println("  +--------------------+")
-	fmt.Printf("  |floor = %-2d          |\n", e.Floor)
-	fmt.Printf("  |dirn  = %-12s|\n", motorDirToString(e.Dirn))
-	fmt.Printf("  |behav = %-12s|\n", e.Behaviour.String())
-	fmt.Println("  +--------------------+")
-	fmt.Println("  |  | up  | dn  | cab |")
-	for f := config.N_FLOORS - 1; f >= 0; f-- {
-		fmt.Printf("  | %d", f)
-		for btn := 0; btn < config.N_BUTTONS; btn++ {
-			if (f == config.N_FLOORS-1 && btn == int(elevio.BT_HallUp)) || (f == 0 && btn == int(elevio.BT_HallDown)) {
-				fmt.Printf("|     ")
-			} else {
-				if e.Requests[f][btn] {
-					fmt.Printf("|  #  ")
-				} else {
-					fmt.Printf("|  -  ")
-				}
-			}
-		}
-		fmt.Println("|")
-	}
-	fmt.Println("  +--------------------+")
-}
-
-*/
-
+// Function to initialize the elevator
 func ElevatorUninitialized() config.Elevator {
 	req := make([][]bool, config.N_FLOORS)
 	for i := 0; i < config.N_FLOORS; i++ {
@@ -103,19 +64,6 @@ func ElevatorUninitialized() config.Elevator {
 		Floor:     -1,
 		Dirn:      elevio.MD_Stop,
 		Behaviour: config.EB_Idle,
-		Requests: req,
-	}
-}
-
-func motorDirToString(dir elevio.MotorDirection) string {
-	switch dir {
-	case elevio.MD_Up:
-		return "Up"
-	case elevio.MD_Down:
-		return "Down"
-	case elevio.MD_Stop:
-		return "Stop"
-	default:
-		return "Unknown"
+		Requests:  req,
 	}
 }

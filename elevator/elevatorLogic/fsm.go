@@ -3,52 +3,46 @@ package elevatorLogic
 
 import (
 	//"fmt"
-	"Driver-go/elevio"
 	"Config/config"
+	"Driver-go/elevio"
 )
 
 var elevator config.Elevator
 
+// Initialize the elevator
 func init() {
 	elevator = ElevatorUninitialized()
 }
 
+// Returns the elevator
 func GetElevator() config.Elevator {
 	return elevator
 }
 
-/*
-func setAllLights(e config.Elevator) {
-	for floor := 0; floor < config.N_FLOORS; floor++ {
-		for btn := 0; btn < config.N_BUTTONS; btn++ {
-			elevio.SetButtonLamp(elevio.ButtonType(btn), floor, e.Requests[floor][btn])
-			//fmt.Println(elevio.ButtonType(btn), floor, e.Requests[floor][btn])
-		}
-	}
-}
-
-*/
-
+// When the elevator starts this function is called to fix its position
 func FsmOnInitBetweenFloors() {
 	elevio.SetMotorDirection(elevio.MD_Down)
 	elevator.Dirn = elevio.MD_Down
 	elevator.Behaviour = config.EB_Moving
 }
 
+// This function is called when a button is pressed and updates the requests
 func FsmOnRequestButtonPress(btnFloor int, btnType int) {
-	//fmt.Printf("\n\nFsmOnRequestButtonPress(%d, %s)\n", btnFloor, buttonToString(btnType))
-	//ElevatorPrint(elevator)
 
 	switch elevator.Behaviour {
+	// If the door is open check if the call can be cleared immediately and resets the timer
 	case config.EB_DoorOpen:
 		if requestsShouldClearImmediately(elevator, btnFloor, btnType) {
 			TimerStart(config.DOOR_OPEN_DURATION)
 		} else {
 			elevator.Requests[btnFloor][btnType] = true
 		}
+
 	case config.EB_Moving:
 		elevator.Requests[btnFloor][btnType] = true
 	case config.EB_Idle:
+
+		// If the elevator is still it choses a direction to move towards the request
 		elevator.Requests[btnFloor][btnType] = true
 		pair := requestsChooseDirection(elevator)
 		elevator.Dirn = pair.Dirn
@@ -63,18 +57,15 @@ func FsmOnRequestButtonPress(btnFloor int, btnType int) {
 		case config.EB_Idle:
 		}
 	}
-	//setAllLights(elevator)
-	//fmt.Println("\nNew state:")
-	//ElevatorPrint(elevator)
 }
 
+// This function is called when the elevator gets to a floor
 func FsmOnFloorArrival(newFloor int) {
-	//fmt.Printf("\n\nFsmOnFloorArrival(%d)\n", newFloor)
-	//ElevatorPrint(elevator)
 
 	elevator.Floor = newFloor
 	elevio.SetFloorIndicator(elevator.Floor)
 
+	// It checks if the elevator should stop to serve a call
 	if elevator.Behaviour == config.EB_Moving {
 		if requestsShouldStop(elevator) {
 			elevio.SetMotorDirection(elevio.MD_Stop)
@@ -86,18 +77,19 @@ func FsmOnFloorArrival(newFloor int) {
 		}
 	}
 
-	//fmt.Println("\nNew state:")
-	//ElevatorPrint(elevator)
 }
 
+// This function is called when the timer times out
 func FsmOnDoorTimeout() {
-	//fmt.Println("\n\nFsmOnDoorTimeout()")
-	//ElevatorPrint(elevator)
 
+	// If theres an obstruction close the door
 	if elevio.GetObstruction() {
 		TimerStart(config.DOOR_OPEN_DURATION)
+		elevator.Obstructed = true
 		return
 	}
+	elevator.Obstructed = false
+
 	if elevator.Behaviour == config.EB_DoorOpen {
 		pair := requestsChooseDirection(elevator)
 		elevator.Dirn = pair.Dirn
@@ -107,26 +99,10 @@ func FsmOnDoorTimeout() {
 		case config.EB_DoorOpen:
 			TimerStart(config.DOOR_OPEN_DURATION)
 			elevator = requestsClearAtCurrentFloor(elevator)
-			//setAllLights(elevator)
 		case config.EB_Moving, config.EB_Idle:
 			elevio.SetDoorOpenLamp(false)
 			elevio.SetMotorDirection(elevator.Dirn)
 		}
 	}
 
-	//fmt.Println("\nNew state:")
-	//ElevatorPrint(elevator)
-}
-
-func buttonToString(btnType int) string {
-	switch elevio.ButtonType(btnType) {
-	case elevio.BT_HallUp:
-		return "HallUp"
-	case elevio.BT_HallDown:
-		return "HallDown"
-	case elevio.BT_Cab:
-		return "Cab"
-	default:
-		return "Unknown"
-	}
 }

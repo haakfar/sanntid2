@@ -2,8 +2,8 @@
 package elevatorLogic
 
 import (
-	"Driver-go/elevio"
 	"Config/config"
+	"Driver-go/elevio"
 )
 
 type DirnBehaviourPair struct {
@@ -11,6 +11,7 @@ type DirnBehaviourPair struct {
 	Behaviour config.ElevatorBehaviour
 }
 
+// This function checks if there are any requests above
 func requestsAbove(e config.Elevator) bool {
 	for f := e.Floor + 1; f < config.N_FLOORS; f++ {
 		for btn := 0; btn < config.N_BUTTONS; btn++ {
@@ -22,6 +23,7 @@ func requestsAbove(e config.Elevator) bool {
 	return false
 }
 
+// This function checks if there are any requests below
 func requestsBelow(e config.Elevator) bool {
 	for f := 0; f < e.Floor; f++ {
 		for btn := 0; btn < config.N_BUTTONS; btn++ {
@@ -33,6 +35,7 @@ func requestsBelow(e config.Elevator) bool {
 	return false
 }
 
+// This function checks if there are any requests here
 func requestsHere(e config.Elevator) bool {
 	for btn := 0; btn < config.N_BUTTONS; btn++ {
 		if e.Requests[e.Floor][btn] {
@@ -42,6 +45,7 @@ func requestsHere(e config.Elevator) bool {
 	return false
 }
 
+// This function choses the direction based on the remaining requests
 func requestsChooseDirection(e config.Elevator) DirnBehaviourPair {
 	switch e.Dirn {
 	case elevio.MD_Up:
@@ -79,6 +83,7 @@ func requestsChooseDirection(e config.Elevator) DirnBehaviourPair {
 	}
 }
 
+// This function check whether the elevator should stop for a request
 func requestsShouldStop(e config.Elevator) bool {
 	switch e.Dirn {
 	case elevio.MD_Down:
@@ -96,14 +101,16 @@ func requestsShouldStop(e config.Elevator) bool {
 	}
 }
 
+// This function checks if a request should be cleared immediately (call on the same floor we are in)
 func requestsShouldClearImmediately(e config.Elevator, btnFloor int, btnType int) bool {
 	return e.Floor == btnFloor &&
-	((e.Dirn == elevio.MD_Up && btnType == int(elevio.BT_HallUp)) ||
-		(e.Dirn == elevio.MD_Down && btnType == int(elevio.BT_HallDown)) ||
-		e.Dirn == elevio.MD_Stop ||
-		btnType == int(elevio.BT_Cab))
+		((e.Dirn == elevio.MD_Up && btnType == int(elevio.BT_HallUp)) ||
+			(e.Dirn == elevio.MD_Down && btnType == int(elevio.BT_HallDown)) ||
+			e.Dirn == elevio.MD_Stop ||
+			btnType == int(elevio.BT_Cab))
 }
 
+// This function clear all the clearable requests at the current floor
 func requestsClearAtCurrentFloor(e config.Elevator) config.Elevator {
 	e.Requests[e.Floor][int(elevio.BT_Cab)] = false
 

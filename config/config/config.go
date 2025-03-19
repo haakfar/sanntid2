@@ -39,6 +39,7 @@ type Elevator struct {
 	Dirn      elevio.MotorDirection
 	Behaviour ElevatorBehaviour
 	Requests  [][]bool 
+	Obstructed bool
 }
 
 // World view structure
