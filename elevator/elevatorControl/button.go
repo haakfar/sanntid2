@@ -80,11 +80,6 @@ func elevatorSenderUntilConfirmation(btnMsg utils.ButtonMessage) {
 	sendChan := make(chan utils.ButtonMessage)
 	go bcast.Transmitter(utils.ElevatorToMasterPort, sendChan)
 
-	sendChan <- btnMsg
-
-	return
-
-	//***********
 	receiveConfChan := make(chan utils.ButtonMessage)
 	go bcast.Receiver(utils.MasterConfPort, receiveConfChan)
 

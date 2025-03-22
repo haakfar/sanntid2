@@ -25,7 +25,7 @@ func RunMaster(quitChan chan bool) {
 		case btnMsg := <-receiveChan:
 
 			// We send the confirmation back
-			//sendConfChan <- btnMsg
+			sendConfChan <- btnMsg
 
 			// If the call is already assigned we ignore it
 			if callAlreadyAssigned(btnMsg) {
@@ -62,10 +62,6 @@ func masterSenderUntilConfirmation(btnMsg utils.ButtonMessage) {
 	sendChan := make(chan utils.ButtonMessage)
 	go bcast.Transmitter(utils.MasterToElevatorPort, sendChan)
 
-	sendChan <- btnMsg
-
-	return
-	//**********
 	receiveConfChan := make(chan utils.ButtonMessage)
 	go bcast.Receiver(utils.ElevatorConfPort, receiveConfChan)
 

@@ -70,7 +70,17 @@ func calcTime(elevator utils.Elevator, btnEvent elevio.ButtonEvent) float64 {
 	if elevSim.Obstructed {
 		time += 60
 	}
+
+	/*
+	Sometimes this starts looping and I don't know why, so, instead of fixing the problem (I tried)
+	we make sure that if the function loops enough times it exits the loop
+	*/
+
+	loops := 0
 	for {
+
+		// If loop >= 50, the function got stuck so we return a high value of time
+		if loops >= 50 {return 120}
 
 		// We get currentTop and bottom Destination
 		topDest := getTopDestination(elevSim)
@@ -113,6 +123,8 @@ func calcTime(elevator utils.Elevator, btnEvent elevio.ButtonEvent) float64 {
 			time += 2.5
 			elevSim.Floor--
 		}
+
+		loops++;
 	}
 }
 
