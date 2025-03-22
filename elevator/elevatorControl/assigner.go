@@ -1,7 +1,7 @@
 package elevatorControl
 
 import (
-	"Config/config"
+	"Utils/utils"
 	"Driver-go/elevio"
 )
 
@@ -10,7 +10,7 @@ import (
 func FindBestElevator(btnEvent elevio.ButtonEvent) int {
 	minTime := -1.0
 	minEl := -1
-	for el := 0; el < config.N_ELEVATORS; el++ {
+	for el := 0; el < utils.N_ELEVATORS; el++ {
 		WorldViewMutex.Lock()
 		if WorldView.Alive[el] {
 			WorldViewMutex.Unlock()
@@ -33,28 +33,28 @@ func FindBestElevator(btnEvent elevio.ButtonEvent) int {
 
 // here we try to simulate how much time it takes for the elevator to serve that call (2.5 seconds to move between floors, 3 seconds when stopping at the floor)
 // I tried it quite a lot and it seems to not crash anymore
-func calcTime(elevator config.Elevator, btnEvent elevio.ButtonEvent) float64 {
+func calcTime(elevator utils.Elevator, btnEvent elevio.ButtonEvent) float64 {
 
 	// if elevator is still its just the time to get to the floor
-	if elevator.Behaviour == config.EB_Idle {
+	if elevator.Behaviour == utils.EB_Idle {
 		return float64(abs(elevator.Floor-btnEvent.Floor)) * 2.5
 	}
 
 	// we create a copy of the elevator (this is a bad way to do it)
 
-	var elevSim config.Elevator
+	var elevSim utils.Elevator
 	elevSim.Floor = elevator.Floor
 	elevSim.Dirn = elevator.Dirn
 	elevSim.Behaviour = elevator.Behaviour
 	elevSim.Obstructed = elevator.Obstructed
 
-	elevSim.Requests = make([][]bool, config.N_FLOORS)
+	elevSim.Requests = make([][]bool, utils.N_FLOORS)
 	for i := range elevSim.Requests {
-		elevSim.Requests[i] = make([]bool, config.N_BUTTONS)
+		elevSim.Requests[i] = make([]bool, utils.N_BUTTONS)
 	}
 
-	for floor := 0; floor < config.N_FLOORS; floor++ {
-		for btn := 0; btn < config.N_BUTTONS; btn++ {
+	for floor := 0; floor < utils.N_FLOORS; floor++ {
+		for btn := 0; btn < utils.N_BUTTONS; btn++ {
 			elevSim.Requests[floor][btn] = elevator.Requests[floor][btn]
 		}
 	}
@@ -62,7 +62,7 @@ func calcTime(elevator config.Elevator, btnEvent elevio.ButtonEvent) float64 {
 	time := 0.0
 
 	// If the door is open we add 3 seconds for it to close
-	if elevSim.Behaviour == config.EB_DoorOpen {
+	if elevSim.Behaviour == utils.EB_DoorOpen {
 		time += 3
 	}
 
@@ -125,9 +125,9 @@ func abs(n int) int {
 }
 
 // Function to get the current top destination of the elevator
-func getTopDestination(elevator config.Elevator) int {
-	for floor := config.N_FLOORS - 1; floor >= 0; floor-- {
-		for btn := 0; btn < config.N_BUTTONS; btn++ {
+func getTopDestination(elevator utils.Elevator) int {
+	for floor := utils.N_FLOORS - 1; floor >= 0; floor-- {
+		for btn := 0; btn < utils.N_BUTTONS; btn++ {
 			if elevator.Requests[floor][btn] {
 				return floor
 			}
@@ -139,9 +139,9 @@ func getTopDestination(elevator config.Elevator) int {
 }
 
 // Function to get the current bottom destination of the elevator
-func getBottomDestination(elevator config.Elevator) int {
-	for floor := 0; floor < config.N_FLOORS; floor++ {
-		for btn := 0; btn < config.N_BUTTONS; btn++ {
+func getBottomDestination(elevator utils.Elevator) int {
+	for floor := 0; floor < utils.N_FLOORS; floor++ {
+		for btn := 0; btn < utils.N_BUTTONS; btn++ {
 			if elevator.Requests[floor][btn] {
 				return floor
 			}

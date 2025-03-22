@@ -6,13 +6,14 @@ replace Network-go => ./network
 
 replace Driver-go => ./driver
 
-replace Config => ./config
+replace Utils => ./utils
 
 replace Elevator => ./elevator
 
+require Elevator v0.0.0-00010101000000-000000000000
+
 require (
-	Config v0.0.0-00010101000000-000000000000
-	Driver-go v0.0.0-00010101000000-000000000000
-	Elevator v0.0.0-00010101000000-000000000000
-	Network-go v0.0.0-00010101000000-000000000000
+	Driver-go v0.0.0-00010101000000-000000000000 // indirect
+	Network-go v0.0.0-00010101000000-000000000000 // indirect
+	Utils v0.0.0-00010101000000-000000000000 // indirect
 )

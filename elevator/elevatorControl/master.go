@@ -1,7 +1,7 @@
 package elevatorControl
 
 import (
-	"Config/config"
+	"Utils/utils"
 	"Driver-go/elevio"
 	"Network-go/network/bcast"
 	"fmt"
@@ -14,10 +14,10 @@ var exit bool
 func RunMaster(quitChan chan bool) {
 
 	// Channels and broadcasts to receive button presses and send confirmation
-	receiveChan := make(chan config.ButtonMessage)
-	go bcast.Receiver(config.ElevatorToMasterPort, receiveChan)
-	sendConfChan := make(chan config.ButtonMessage)
-	go bcast.Transmitter(config.MasterConfPort, sendConfChan)
+	receiveChan := make(chan utils.ButtonMessage)
+	go bcast.Receiver(utils.ElevatorToMasterPort, receiveChan)
+	sendConfChan := make(chan utils.ButtonMessage)
+	go bcast.Transmitter(utils.MasterConfPort, sendConfChan)
 
 	for {
 		// Every time a button is pressed its sent to the master
@@ -56,18 +56,18 @@ func RunMaster(quitChan chan bool) {
 }
 
 // This function sends the button press to the assigned elevator until a confirmation is received
-func masterSenderUntilConfirmation(btnMsg config.ButtonMessage) {
+func masterSenderUntilConfirmation(btnMsg utils.ButtonMessage) {
 
 	// Channels and broadcasts to send button presses to the elevator and receive the confirmation
-	sendChan := make(chan config.ButtonMessage)
-	go bcast.Transmitter(config.MasterToElevatorPort, sendChan)
+	sendChan := make(chan utils.ButtonMessage)
+	go bcast.Transmitter(utils.MasterToElevatorPort, sendChan)
 
 	sendChan <- btnMsg
 
 	return
 	//**********
-	receiveConfChan := make(chan config.ButtonMessage)
-	go bcast.Receiver(config.ElevatorConfPort, receiveConfChan)
+	receiveConfChan := make(chan utils.ButtonMessage)
+	go bcast.Receiver(utils.ElevatorConfPort, receiveConfChan)
 
 	ticker := time.NewTicker(300 * time.Millisecond)
 	defer ticker.Stop()
@@ -101,7 +101,7 @@ func masterSenderUntilConfirmation(btnMsg config.ButtonMessage) {
 }
 
 // This function checks if the call is already assigned.
-func callAlreadyAssigned(btnMsg config.ButtonMessage) bool {
+func callAlreadyAssigned(btnMsg utils.ButtonMessage) bool {
 
 	alreadyAssigned := false
 
@@ -117,7 +117,7 @@ func callAlreadyAssigned(btnMsg config.ButtonMessage) bool {
 	} else {
 
 		// For hall calls we check if its assigned to any elevator
-		for el := 0; el < config.N_ELEVATORS; el++ {
+		for el := 0; el < utils.N_ELEVATORS; el++ {
 			WorldViewMutex.Lock()
 			if WorldView.Alive[el] && WorldView.Elevators[el].Requests[btnMsg.ButtonEvent.Floor][btnMsg.ButtonEvent.Button] {
 				alreadyAssigned = true

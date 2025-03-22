@@ -2,21 +2,21 @@
 package elevatorLogic
 
 import (
-	"Config/config"
+	"Utils/utils"
 	"Driver-go/elevio"
 	"fmt"
 	"time"
 )
 
 // Function called when an elevator starts
-func StartElevator(buttonCh chan elevio.ButtonEvent, elevatorCh chan config.Elevator) {
+func StartElevator(buttonCh chan elevio.ButtonEvent, elevatorCh chan utils.Elevator) {
 
 	//Receives calls from buttonCh, sends updates when reaches a floor to elevator
 	fmt.Println("Started!")
 
 	inputPollRate := 25 * time.Millisecond
 
-	elevio.Init("localhost:15657", config.N_FLOORS)
+	elevio.Init("localhost:15657", utils.N_FLOORS)
 
 	floorCh := make(chan int)
 
@@ -55,15 +55,15 @@ func StartElevator(buttonCh chan elevio.ButtonEvent, elevatorCh chan config.Elev
 }
 
 // Function to initialize the elevator
-func ElevatorUninitialized() config.Elevator {
-	req := make([][]bool, config.N_FLOORS)
-	for i := 0; i < config.N_FLOORS; i++ {
-		req[i] = make([]bool, config.N_BUTTONS)
+func ElevatorUninitialized() utils.Elevator {
+	req := make([][]bool, utils.N_FLOORS)
+	for i := 0; i < utils.N_FLOORS; i++ {
+		req[i] = make([]bool, utils.N_BUTTONS)
 	}
-	return config.Elevator{
+	return utils.Elevator{
 		Floor:     -1,
 		Dirn:      elevio.MD_Stop,
-		Behaviour: config.EB_Idle,
+		Behaviour: utils.EB_Idle,
 		Requests:  req,
 	}
 }

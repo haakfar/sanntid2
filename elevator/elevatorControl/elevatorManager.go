@@ -1,7 +1,7 @@
 package elevatorControl
 
 import (
-	"Config/config"
+	"Utils/utils"
 	"Driver-go/elevio"
 	"Elevator/elevatorLogic"
 	"Network-go/network/bcast"
@@ -12,22 +12,22 @@ import (
 )
 
 var WorldViewMutex sync.Mutex
-var WorldView config.WorldView
+var WorldView utils.WorldView
 
 // Function to initialize the worldview (gets executed when the program starts)
 func init() {
 	WorldViewMutex.Lock()
-	WorldView.Role = config.SLAVE
+	WorldView.Role = utils.SLAVE
 	defer WorldViewMutex.Unlock()
 
-	WorldView = config.WorldView{}
-	for i := 0; i < config.N_ELEVATORS; i++ {
-		requests := make([][]bool, config.N_FLOORS)
+	WorldView = utils.WorldView{}
+	for i := 0; i < utils.N_ELEVATORS; i++ {
+		requests := make([][]bool, utils.N_FLOORS)
 		for j := range requests {
-			requests[j] = make([]bool, config.N_BUTTONS)
+			requests[j] = make([]bool, utils.N_BUTTONS)
 		}
 
-		WorldView.Elevators[i] = config.Elevator{
+		WorldView.Elevators[i] = utils.Elevator{
 			Floor:      0,
 			Dirn:       0,
 			Behaviour:  0,
@@ -41,14 +41,14 @@ func StartManager(elevatorID int, portNumber int) {
 
 	// Start elevator I/O with port number
 	var portNumberString string = strconv.Itoa(portNumber)
-	elevio.Init("localhost:"+portNumberString, config.N_FLOORS)
+	elevio.Init("localhost:"+portNumberString, utils.N_FLOORS)
 
 	// Initializing WorldView
 	WorldView.ElevatorID = elevatorID
 	WorldView.Alive[elevatorID] = true
 
 	// The elevator sends updates through this channel to update the world view
-	elevatorCh := make(chan config.Elevator)
+	elevatorCh := make(chan utils.Elevator)
 
 	// The eleavtor sends button presses through this channel
 	btnCh := make(chan elevio.ButtonEvent)
@@ -66,7 +66,7 @@ func StartManager(elevatorID int, portNumber int) {
 	go ButtonListener(btnCh, btnCabChan)
 
 	// When an elevator dies, its calls are reassigned through this channel
-	btnReassignChan := make(chan config.ButtonMessage)
+	btnReassignChan := make(chan utils.ButtonMessage)
 
 	// Button send function (listens from the elevator (and the reassigned calls) and sends to master)
 	go ButtonSender(btnReassignChan, btnCabChan)
@@ -83,7 +83,7 @@ func StartManager(elevatorID int, portNumber int) {
 }
 
 // This function receives updates relative to the elevator from the elevator itself and updates the worldview
-func elevatorListener(elevatorCh chan config.Elevator) {
+func elevatorListener(elevatorCh chan utils.Elevator) {
 
 	for {
 		select {
@@ -100,19 +100,19 @@ func elevatorListener(elevatorCh chan config.Elevator) {
 }
 
 // This function listens to the other elevator world views and does a bunch of things
-func bcastListener(btnReassignChan chan config.ButtonMessage) {
+func bcastListener(btnReassignChan chan utils.ButtonMessage) {
 
 	// When an elevator dies, we save the calls here untile they are reassigned
-	var deadCabCalls [config.N_ELEVATORS][config.N_FLOORS]bool
+	var deadCabCalls [utils.N_ELEVATORS][utils.N_FLOORS]bool
 
 	// Channel to receive other elevators world view
-	receiveChan := make(chan config.WorldView)
+	receiveChan := make(chan utils.WorldView)
 
 	// Broadcast world view receive function
-	go bcast.Receiver(config.WorldViewPort, receiveChan)
+	go bcast.Receiver(utils.WorldViewPort, receiveChan)
 
 	// Here we keep which elevator broadcasts we have received so that we can tell which one is alive (or dead)
-	var received [config.N_ELEVATORS]bool
+	var received [utils.N_ELEVATORS]bool
 
 	// This channel is used to stop the "master functions" when an elevator demotes from master
 	quitChan := make(chan bool)
@@ -129,7 +129,7 @@ func bcastListener(btnReassignChan chan config.ButtonMessage) {
 		backupFound := false
 
 		// Set received as false
-		for i := 0; i < config.N_ELEVATORS; i++ {
+		for i := 0; i < utils.N_ELEVATORS; i++ {
 			received[i] = false
 		}
 
@@ -142,7 +142,7 @@ func bcastListener(btnReassignChan chan config.ButtonMessage) {
 			case wv := <-receiveChan:
 
 				// We update the other elevators
-				for i := 0; i < config.N_ELEVATORS; i++ {
+				for i := 0; i < utils.N_ELEVATORS; i++ {
 					if i != WorldView.ElevatorID {
 						WorldViewMutex.Lock()
 
@@ -162,17 +162,17 @@ func bcastListener(btnReassignChan chan config.ButtonMessage) {
 
 				if wv.Role == WorldView.Role && wv.ElevatorID < WorldView.ElevatorID {
 
-					if WorldView.Role == config.MASTER {
+					if WorldView.Role == utils.MASTER {
 
-						WorldView.Role = config.SLAVE
+						WorldView.Role = utils.SLAVE
 						fmt.Println("MASTER going back to SLAVE")
 
 						// If we are master we stop doing "master stuff"
 						quitChan <- true
 
-					} else if WorldView.Role == config.BACKUP {
+					} else if WorldView.Role == utils.BACKUP {
 
-						WorldView.Role = config.SLAVE
+						WorldView.Role = utils.SLAVE
 						fmt.Println("BACKUP going back to SLAVE")
 
 					}
@@ -181,10 +181,10 @@ func bcastListener(btnReassignChan chan config.ButtonMessage) {
 
 				// Check if we received master or backup signals
 
-				if wv.Role == config.MASTER {
+				if wv.Role == utils.MASTER {
 					masterFound = true
 				}
-				if wv.Role == config.BACKUP {
+				if wv.Role == utils.BACKUP {
 					backupFound = true
 				}
 
@@ -196,7 +196,7 @@ func bcastListener(btnReassignChan chan config.ButtonMessage) {
 
 		// After listening for 1 second, we update which elevators are alive
 
-		for i := 0; i < config.N_ELEVATORS; i++ {
+		for i := 0; i < utils.N_ELEVATORS; i++ {
 			WorldViewMutex.Lock()
 
 			// If alive != received, the elevator died or came back
@@ -209,7 +209,7 @@ func bcastListener(btnReassignChan chan config.ButtonMessage) {
 					fmt.Printf("Elevator %d now alive\n", i)
 
 					// If an elevator comes back alive, we must reassign its cab calls
-					for floor := 0; floor < config.N_FLOORS; floor++ {
+					for floor := 0; floor < utils.N_FLOORS; floor++ {
 
 						// We basically simulate pressing all the cab calls button the elevator had
 						if deadCabCalls[i][floor] {
@@ -217,7 +217,7 @@ func bcastListener(btnReassignChan chan config.ButtonMessage) {
 							fmt.Println("Reassinging ", floor, elevio.BT_Cab)
 							deadCabCalls[i][floor] = false
 
-							btnMsg := config.ButtonMessage{
+							btnMsg := utils.ButtonMessage{
 								ButtonEvent: elevio.ButtonEvent{
 									Floor:  floor,
 									Button: elevio.BT_Cab,
@@ -235,15 +235,15 @@ func bcastListener(btnReassignChan chan config.ButtonMessage) {
 					fmt.Printf("Elevator %d now dead\n", i)
 
 					// If an elevator dies, we must reassign his hall calls
-					for floor := 0; floor < config.N_FLOORS; floor++ {
-						for btn := 0; btn < config.N_BUTTONS-1; btn++ {
+					for floor := 0; floor < utils.N_FLOORS; floor++ {
+						for btn := 0; btn < utils.N_BUTTONS-1; btn++ {
 
 							// We basically simulate pressing all the hall calls button the elevator had and the master will assign to the remaining elevators
 							if WorldView.Elevators[i].Requests[floor][btn] {
 
 								fmt.Println("Reassinging ", floor, btn)
 
-								btnMsg := config.ButtonMessage{
+								btnMsg := utils.ButtonMessage{
 									ButtonEvent: elevio.ButtonEvent{
 										Floor:  floor,
 										Button: elevio.ButtonType(btn),
@@ -271,17 +271,17 @@ func bcastListener(btnReassignChan chan config.ButtonMessage) {
 		WorldViewMutex.Lock()
 
 		// If we are a backup and theres no master become master
-		if WorldView.Role == config.BACKUP && !masterFound {
+		if WorldView.Role == utils.BACKUP && !masterFound {
 			fmt.Println("No MASTER found, BACKUP becoming MASTER")
-			WorldView.Role = config.MASTER
+			WorldView.Role = utils.MASTER
 
 			// And we start doing "master stuff"
 			go RunMaster(quitChan)
 
 			// If we are a slave and theres no backup become backup
-		} else if WorldView.Role == config.SLAVE && !backupFound {
+		} else if WorldView.Role == utils.SLAVE && !backupFound {
 			fmt.Println("No BACKUP found, SLAVE becoming BACKUP")
-			WorldView.Role = config.BACKUP
+			WorldView.Role = utils.BACKUP
 		}
 
 		WorldViewMutex.Unlock()
@@ -290,12 +290,12 @@ func bcastListener(btnReassignChan chan config.ButtonMessage) {
 }
 
 // This function checks if an elevator changed from what we have in the world view
-func differentElevator(el1 config.Elevator, el2 config.Elevator) bool {
+func differentElevator(el1 utils.Elevator, el2 utils.Elevator) bool {
 	if el1.Floor != el2.Floor || el1.Dirn != el2.Dirn || el1.Behaviour != el2.Behaviour {
 		return true
 	}
-	for floor := 0; floor < config.N_FLOORS; floor++ {
-		for btn := 0; btn < config.N_BUTTONS; btn++ {
+	for floor := 0; floor < utils.N_FLOORS; floor++ {
+		for btn := 0; btn < utils.N_BUTTONS; btn++ {
 			if el1.Requests[floor][btn] != el2.Requests[floor][btn] {
 				return true
 			}
@@ -308,9 +308,9 @@ func differentElevator(el1 config.Elevator, el2 config.Elevator) bool {
 func bcastSender() {
 
 	// This channel is to send the world view
-	sendChan := make(chan config.WorldView)
+	sendChan := make(chan utils.WorldView)
 
-	go bcast.Transmitter(config.WorldViewPort, sendChan)
+	go bcast.Transmitter(utils.WorldViewPort, sendChan)
 	for {
 		WorldViewMutex.Lock()
 		sendChan <- WorldView

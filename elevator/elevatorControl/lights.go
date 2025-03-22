@@ -2,11 +2,11 @@ package elevatorControl
 
 import (
 	"Driver-go/elevio"
-	"Config/config"
+	"Utils/utils"
 )
 
 func UpdateLights(){
-	for floor := 0; floor < config.N_FLOORS; floor++ {
+	for floor := 0; floor < utils.N_FLOORS; floor++ {
 
 		// If theres a hall call on the floor light up
 		elevio.SetButtonLamp(elevio.BT_HallUp, floor, callOnFloor(floor, elevio.BT_HallUp))
@@ -22,7 +22,7 @@ func UpdateLights(){
 // For every elevator alive check if theres a call on floor
 func callOnFloor(floor int, call elevio.ButtonType) bool {
 
-	for el := 0; el < config.N_ELEVATORS; el++{
+	for el := 0; el < utils.N_ELEVATORS; el++{
 		WorldViewMutex.Lock()
 		if !WorldView.Alive[el] {
 			WorldViewMutex.Unlock()

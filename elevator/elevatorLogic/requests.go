@@ -2,19 +2,19 @@
 package elevatorLogic
 
 import (
-	"Config/config"
+	"Utils/utils"
 	"Driver-go/elevio"
 )
 
 type DirnBehaviourPair struct {
 	Dirn      elevio.MotorDirection
-	Behaviour config.ElevatorBehaviour
+	Behaviour utils.ElevatorBehaviour
 }
 
 // This function checks if there are any requests above
-func requestsAbove(e config.Elevator) bool {
-	for f := e.Floor + 1; f < config.N_FLOORS; f++ {
-		for btn := 0; btn < config.N_BUTTONS; btn++ {
+func requestsAbove(e utils.Elevator) bool {
+	for f := e.Floor + 1; f < utils.N_FLOORS; f++ {
+		for btn := 0; btn < utils.N_BUTTONS; btn++ {
 			if e.Requests[f][btn] {
 				return true
 			}
@@ -24,9 +24,9 @@ func requestsAbove(e config.Elevator) bool {
 }
 
 // This function checks if there are any requests below
-func requestsBelow(e config.Elevator) bool {
+func requestsBelow(e utils.Elevator) bool {
 	for f := 0; f < e.Floor; f++ {
-		for btn := 0; btn < config.N_BUTTONS; btn++ {
+		for btn := 0; btn < utils.N_BUTTONS; btn++ {
 			if e.Requests[f][btn] {
 				return true
 			}
@@ -36,8 +36,8 @@ func requestsBelow(e config.Elevator) bool {
 }
 
 // This function checks if there are any requests here
-func requestsHere(e config.Elevator) bool {
-	for btn := 0; btn < config.N_BUTTONS; btn++ {
+func requestsHere(e utils.Elevator) bool {
+	for btn := 0; btn < utils.N_BUTTONS; btn++ {
 		if e.Requests[e.Floor][btn] {
 			return true
 		}
@@ -46,45 +46,45 @@ func requestsHere(e config.Elevator) bool {
 }
 
 // This function choses the direction based on the remaining requests
-func requestsChooseDirection(e config.Elevator) DirnBehaviourPair {
+func requestsChooseDirection(e utils.Elevator) DirnBehaviourPair {
 	switch e.Dirn {
 	case elevio.MD_Up:
 		if requestsAbove(e) {
-			return DirnBehaviourPair{Dirn: elevio.MD_Up, Behaviour: config.EB_Moving}
+			return DirnBehaviourPair{Dirn: elevio.MD_Up, Behaviour: utils.EB_Moving}
 		} else if requestsHere(e) {
-			return DirnBehaviourPair{Dirn: elevio.MD_Down, Behaviour: config.EB_DoorOpen}
+			return DirnBehaviourPair{Dirn: elevio.MD_Down, Behaviour: utils.EB_DoorOpen}
 		} else if requestsBelow(e) {
-			return DirnBehaviourPair{Dirn: elevio.MD_Down, Behaviour: config.EB_Moving}
+			return DirnBehaviourPair{Dirn: elevio.MD_Down, Behaviour: utils.EB_Moving}
 		} else {
-			return DirnBehaviourPair{Dirn: elevio.MD_Stop, Behaviour: config.EB_Idle}
+			return DirnBehaviourPair{Dirn: elevio.MD_Stop, Behaviour: utils.EB_Idle}
 		}
 	case elevio.MD_Down:
 		if requestsBelow(e) {
-			return DirnBehaviourPair{Dirn: elevio.MD_Down, Behaviour: config.EB_Moving}
+			return DirnBehaviourPair{Dirn: elevio.MD_Down, Behaviour: utils.EB_Moving}
 		} else if requestsHere(e) {
-			return DirnBehaviourPair{Dirn: elevio.MD_Up, Behaviour: config.EB_DoorOpen}
+			return DirnBehaviourPair{Dirn: elevio.MD_Up, Behaviour: utils.EB_DoorOpen}
 		} else if requestsAbove(e) {
-			return DirnBehaviourPair{Dirn: elevio.MD_Up, Behaviour: config.EB_Moving}
+			return DirnBehaviourPair{Dirn: elevio.MD_Up, Behaviour: utils.EB_Moving}
 		} else {
-			return DirnBehaviourPair{Dirn: elevio.MD_Stop, Behaviour: config.EB_Idle}
+			return DirnBehaviourPair{Dirn: elevio.MD_Stop, Behaviour: utils.EB_Idle}
 		}
 	case elevio.MD_Stop:
 		if requestsHere(e) {
-			return DirnBehaviourPair{Dirn: elevio.MD_Stop, Behaviour: config.EB_DoorOpen}
+			return DirnBehaviourPair{Dirn: elevio.MD_Stop, Behaviour: utils.EB_DoorOpen}
 		} else if requestsAbove(e) {
-			return DirnBehaviourPair{Dirn: elevio.MD_Up, Behaviour: config.EB_Moving}
+			return DirnBehaviourPair{Dirn: elevio.MD_Up, Behaviour: utils.EB_Moving}
 		} else if requestsBelow(e) {
-			return DirnBehaviourPair{Dirn: elevio.MD_Down, Behaviour: config.EB_Moving}
+			return DirnBehaviourPair{Dirn: elevio.MD_Down, Behaviour: utils.EB_Moving}
 		} else {
-			return DirnBehaviourPair{Dirn: elevio.MD_Stop, Behaviour: config.EB_Idle}
+			return DirnBehaviourPair{Dirn: elevio.MD_Stop, Behaviour: utils.EB_Idle}
 		}
 	default:
-		return DirnBehaviourPair{Dirn: elevio.MD_Stop, Behaviour: config.EB_Idle}
+		return DirnBehaviourPair{Dirn: elevio.MD_Stop, Behaviour: utils.EB_Idle}
 	}
 }
 
 // This function check whether the elevator should stop for a request
-func requestsShouldStop(e config.Elevator) bool {
+func requestsShouldStop(e utils.Elevator) bool {
 	switch e.Dirn {
 	case elevio.MD_Down:
 		return e.Requests[e.Floor][int(elevio.BT_HallDown)] ||
@@ -102,7 +102,7 @@ func requestsShouldStop(e config.Elevator) bool {
 }
 
 // This function checks if a request should be cleared immediately (call on the same floor we are in)
-func requestsShouldClearImmediately(e config.Elevator, btnFloor int, btnType int) bool {
+func requestsShouldClearImmediately(e utils.Elevator, btnFloor int, btnType int) bool {
 	return e.Floor == btnFloor &&
 		((e.Dirn == elevio.MD_Up && btnType == int(elevio.BT_HallUp)) ||
 			(e.Dirn == elevio.MD_Down && btnType == int(elevio.BT_HallDown)) ||
@@ -111,7 +111,7 @@ func requestsShouldClearImmediately(e config.Elevator, btnFloor int, btnType int
 }
 
 // This function clear all the clearable requests at the current floor
-func requestsClearAtCurrentFloor(e config.Elevator) config.Elevator {
+func requestsClearAtCurrentFloor(e utils.Elevator) utils.Elevator {
 	e.Requests[e.Floor][int(elevio.BT_Cab)] = false
 
 	switch e.Dirn {
