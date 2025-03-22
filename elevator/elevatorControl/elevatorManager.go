@@ -59,14 +59,17 @@ func StartManager(elevatorID int, portNumber int) {
 	// WorldView update function
 	go elevatorListener(elevatorCh)
 
+	// Channel to send cab calls from the sender to the listener
+	btnCabChan := make(chan elevio.ButtonEvent)
+
 	// Button listen function (listens from the master and sends to elevator)
-	go ButtonListener(btnCh)
+	go ButtonListener(btnCh, btnCabChan)
 
 	// When an elevator dies, its calls are reassigned through this channel
 	btnReassignChan := make(chan config.ButtonMessage)
 
 	// Button send function (listens from the elevator (and the reassigned calls) and sends to master)
-	go ButtonSender(btnReassignChan)
+	go ButtonSender(btnReassignChan, btnCabChan)
 
 	// World view listener
 	go bcastListener(btnReassignChan)

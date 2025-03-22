@@ -10,7 +10,8 @@ import (
 
 // This function receives button broadcasts from the master and sends them to the elevator
 // It also sends a confirmation to the master
-func ButtonListener(btnCh chan elevio.ButtonEvent) {
+// It also receives cab calls from ButtonSender and sends them to the elevator
+func ButtonListener(btnCh chan elevio.ButtonEvent, btnCabChan chan elevio.ButtonEvent) {
 
 	// Channel and broadcasts to receive the button press from the master and send the confirmation
 	receiveChan := make(chan config.ButtonMessage)
@@ -31,6 +32,11 @@ func ButtonListener(btnCh chan elevio.ButtonEvent) {
 				// When we simulate the button press we update the lights
 				UpdateLights()
 			}
+		case btnEvent := <- btnCabChan:
+
+			btnCh <- btnEvent
+
+			UpdateLights()
 		}
 	}
 }
@@ -38,7 +44,8 @@ func ButtonListener(btnCh chan elevio.ButtonEvent) {
 // This function receives button events from the elevator and broadcasts them
 // It also listens to reassigned hall calls when an elevator dies (and cab calls when an elevator comes back) and broadcasts them
 // When a button is pressed we send it to the master untile we receive a confirmation
-func ButtonSender(btnReassignChan chan config.ButtonMessage) {
+// If its a cab call its sent to the listener that sends to the elevator
+func ButtonSender(btnReassignChan chan config.ButtonMessage, btnCabChan chan elevio.ButtonEvent) {
 
 	btnChan := make(chan elevio.ButtonEvent)
 	go elevio.PollButtons(btnChan)
@@ -46,10 +53,14 @@ func ButtonSender(btnReassignChan chan config.ButtonMessage) {
 		select {
 		// This is for calls sent by the elevator
 		case btnEvent := <-btnChan:
-			go elevatorSenderUntilConfirmation(config.ButtonMessage{
-				ButtonEvent: btnEvent,
-				ElevatorID:  WorldView.ElevatorID,
-			})
+			if btnEvent.Button == elevio.BT_Cab {
+				btnCabChan <- btnEvent
+			} else {
+				go elevatorSenderUntilConfirmation(config.ButtonMessage{
+					ButtonEvent: btnEvent,
+					ElevatorID:  WorldView.ElevatorID,
+				})
+			}
 
 		case btnMsg := <-btnReassignChan:
 			// This is for reassigned calls
