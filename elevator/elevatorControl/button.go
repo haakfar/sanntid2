@@ -11,7 +11,7 @@ import (
 // This function receives button broadcasts from the master and sends them to the elevator
 // It also sends a confirmation to the master
 // It also receives cab calls from ButtonSender and sends them to the elevator
-func ButtonListener(btnCh chan elevio.ButtonEvent, btnCabChan chan elevio.ButtonEvent) {
+func ButtonListener(btnCh chan elevio.ButtonEvent, btnCabChan chan elevio.ButtonEvent, btnMasterChan chan utils.ButtonMessage) {
 
 	// Channel and broadcasts to receive the button press from the master and send the confirmation
 	receiveChan := make(chan utils.ButtonMessage)
@@ -37,6 +37,11 @@ func ButtonListener(btnCh chan elevio.ButtonEvent, btnCabChan chan elevio.Button
 			btnCh <- btnEvent
 
 			UpdateLights()
+
+		case btnMsg := <- btnMasterChan:
+			btnCh <- btnMsg.ButtonEvent
+
+			UpdateLights()
 		}
 	}
 }
@@ -45,7 +50,7 @@ func ButtonListener(btnCh chan elevio.ButtonEvent, btnCabChan chan elevio.Button
 // It also listens to reassigned hall calls when an elevator dies (and cab calls when an elevator comes back) and broadcasts them
 // When a button is pressed we send it to the master untile we receive a confirmation
 // If its a cab call its sent to the listener that sends to the elevator
-func ButtonSender(btnReassignChan chan utils.ButtonMessage, btnCabChan chan elevio.ButtonEvent) {
+func ButtonSender(btnReassignChan chan utils.ButtonMessage, btnCabChan chan elevio.ButtonEvent, btnMasterChan chan utils.ButtonMessage) {
 
 	btnChan := make(chan elevio.ButtonEvent)
 	go elevio.PollButtons(btnChan)
@@ -53,14 +58,24 @@ func ButtonSender(btnReassignChan chan utils.ButtonMessage, btnCabChan chan elev
 		select {
 		// This is for calls sent by the elevator
 		case btnEvent := <-btnChan:
-			if btnEvent.Button == elevio.BT_Cab {
-				btnCabChan <- btnEvent
-			} else {
-				go elevatorSenderUntilConfirmation(utils.ButtonMessage{
+
+			if WorldView.Role == utils.MASTER {
+				btnMasterChan <- utils.ButtonMessage{
 					ButtonEvent: btnEvent,
 					ElevatorID:  WorldView.ElevatorID,
-				})
+				}
+			} else {			
+				if btnEvent.Button == elevio.BT_Cab {
+					btnCabChan <- btnEvent
+				} else {
+					go elevatorSenderUntilConfirmation(utils.ButtonMessage{
+						ButtonEvent: btnEvent,
+						ElevatorID:  WorldView.ElevatorID,
+					})
+				}
 			}
+
+
 
 		case btnMsg := <-btnReassignChan:
 			// This is for reassigned calls
@@ -96,6 +111,7 @@ func elevatorSenderUntilConfirmation(btnMsg utils.ButtonMessage) {
 			}
 		case <-ticker.C:
 			fmt.Println("Confirmation from MASTER not received")
+			
 		}
 	}
 }

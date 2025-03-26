@@ -62,17 +62,21 @@ func StartManager(elevatorID int, portNumber int) {
 	// Channel to send cab calls from the sender to the listener
 	btnCabChan := make(chan elevio.ButtonEvent)
 
+	masterSendChan := make(chan utils.ButtonMessage)
+
+	masterReceiveChan := make(chan utils.ButtonMessage)
+
 	// Button listen function (listens from the master and sends to elevator)
-	go ButtonListener(btnCh, btnCabChan)
+	go ButtonListener(btnCh, btnCabChan, masterSendChan)
 
 	// When an elevator dies, its calls are reassigned through this channel
 	btnReassignChan := make(chan utils.ButtonMessage)
 
 	// Button send function (listens from the elevator (and the reassigned calls) and sends to master)
-	go ButtonSender(btnReassignChan, btnCabChan)
+	go ButtonSender(btnReassignChan, btnCabChan, masterReceiveChan)
 
 	// World view listener
-	go bcastListener(btnReassignChan)
+	go bcastListener(btnReassignChan, masterReceiveChan, masterSendChan)
 
 	// Starting the periodic world view sender
 	go bcastSender()
@@ -100,7 +104,7 @@ func elevatorListener(elevatorCh chan utils.Elevator) {
 }
 
 // This function listens to the other elevator world views and does a bunch of things
-func bcastListener(btnReassignChan chan utils.ButtonMessage) {
+func bcastListener(btnReassignChan chan utils.ButtonMessage, masterReceiveChan chan utils.ButtonMessage, masterSendChan chan utils.ButtonMessage) {
 
 	// When an elevator dies, we save the calls here untile they are reassigned
 	var deadCabCalls [utils.N_ELEVATORS][utils.N_FLOORS]bool
@@ -279,7 +283,7 @@ func bcastListener(btnReassignChan chan utils.ButtonMessage) {
 			WorldView.Role = utils.MASTER
 
 			// And we start doing "master stuff"
-			go RunMaster(quitChan)
+			go RunMaster(quitChan, masterReceiveChan, masterSendChan)
 
 			// If we are a slave and theres no backup become backup
 		} else if WorldView.Role == utils.SLAVE && !backupFound {
