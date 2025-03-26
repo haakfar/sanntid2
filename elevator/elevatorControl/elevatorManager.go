@@ -315,6 +315,6 @@ func bcastSender() {
 		WorldViewMutex.Lock()
 		sendChan <- WorldView
 		WorldViewMutex.Unlock()
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 	}
 }

@@ -65,7 +65,7 @@ func masterSenderUntilConfirmation(btnMsg utils.ButtonMessage) {
 	receiveConfChan := make(chan utils.ButtonMessage)
 	go bcast.Receiver(utils.ElevatorConfPort, receiveConfChan)
 
-	ticker := time.NewTicker(300 * time.Millisecond)
+	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 
 	// Every second we send the button press until we receive the confirmation from the elevator
