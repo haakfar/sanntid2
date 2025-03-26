@@ -41,6 +41,9 @@ func ButtonListener(btnCh chan elevio.ButtonEvent, btnCabChan chan elevio.Button
 		case btnMsg := <- btnMasterChan:
 			btnCh <- btnMsg.ButtonEvent
 
+			//WorldViewMutex.Lock()
+			//WorldView.Elevators[WorldView.ElevatorID]
+			//WorldViewMutex.Unlock()
 			UpdateLights()
 		}
 	}
@@ -110,6 +113,9 @@ func elevatorSenderUntilConfirmation(btnMsg utils.ButtonMessage) {
 				return
 			}
 		case <-ticker.C:
+			if WorldView.Role == utils.MASTER {
+				return
+			}
 			fmt.Println("Confirmation from MASTER not received")
 			
 		}

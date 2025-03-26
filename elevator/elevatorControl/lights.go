@@ -24,7 +24,7 @@ func callOnFloor(floor int, call elevio.ButtonType) bool {
 
 	for el := 0; el < utils.N_ELEVATORS; el++{
 		WorldViewMutex.Lock()
-		if !WorldView.Alive[el] {
+		if !WorldView.Alive[el] && WorldView.ElevatorID != el{
 			WorldViewMutex.Unlock()
 			continue
 		}

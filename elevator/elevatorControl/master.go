@@ -43,6 +43,9 @@ func RunMaster(quitChan chan bool, masterReceiveChan chan utils.ButtonMessage, m
 
 				// If its a hall call its assiged to an elevator based on that the assigner says
 				btnMsg.ElevatorID = FindBestElevator(btnMsg.ButtonEvent)
+				if btnMsg.ElevatorID == -1 {
+					btnMsg.ElevatorID = WorldView.ElevatorID
+				}
 				fmt.Println("Assigned hall call to", btnMsg.ElevatorID)
 				go masterSenderUntilConfirmation(btnMsg)
 			}
@@ -63,7 +66,7 @@ func RunMaster(quitChan chan bool, masterReceiveChan chan utils.ButtonMessage, m
 			} else {
 
 				// If its a hall call its assiged to an elevator based on that the assigner says
-				btnMsg.ElevatorID = FindBestElevator(btnMsg.ButtonEvent)
+				//btnMsg.ElevatorID = FindBestElevator(btnMsg.ButtonEvent)
 				fmt.Println("Assigned hall call to", btnMsg.ElevatorID)
 				masterSendChan <- btnMsg
 			}
