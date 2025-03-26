@@ -82,10 +82,11 @@ func ButtonSender(btnReassignChan chan utils.ButtonMessage, btnCabChan chan elev
 
 		case btnMsg := <-btnReassignChan:
 			// This is for reassigned calls
-			go elevatorSenderUntilConfirmation(utils.ButtonMessage{
-				ButtonEvent: btnMsg.ButtonEvent,
-				ElevatorID:  btnMsg.ElevatorID,
-			}, btnChan)
+			if WorldView.Role == utils.MASTER {
+				btnMasterChan <- btnMsg
+			} else {
+				go elevatorSenderUntilConfirmation(btnMsg, btnChan)
+			}
 
 		}
 	}

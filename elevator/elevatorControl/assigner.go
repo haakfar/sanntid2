@@ -68,7 +68,7 @@ func calcTime(elevator utils.Elevator, btnEvent elevio.ButtonEvent) float64 {
 
 	// If the elevator is obstructed we add 60 seconds so that it wont be prioritized
 	if elevSim.Obstructed {
-		time += 60
+		time += 500
 	}
 
 	/*
@@ -80,7 +80,7 @@ func calcTime(elevator utils.Elevator, btnEvent elevio.ButtonEvent) float64 {
 	for {
 
 		// If loop >= 50, the function got stuck so we return a high value of time
-		if loops >= 50 {return 120}
+		if loops >= 50 {return 400}
 
 		// We get currentTop and bottom Destination
 		topDest := getTopDestination(elevSim)

@@ -56,9 +56,6 @@ func StartManager(elevatorID int, portNumber int) {
 	// Starting the elevator
 	go elevatorLogic.StartElevator(btnCh, elevatorCh)
 
-	// WorldView update function
-	go elevatorListener(elevatorCh)
-
 	// Channel to send cab calls from the sender to the listener
 	btnCabChan := make(chan elevio.ButtonEvent)
 
@@ -71,6 +68,9 @@ func StartManager(elevatorID int, portNumber int) {
 
 	// When an elevator dies, its calls are reassigned through this channel
 	btnReassignChan := make(chan utils.ButtonMessage)
+
+	// WorldView update function
+	go elevatorListener(elevatorCh, btnReassignChan)
 
 	// Button send function (listens from the elevator (and the reassigned calls) and sends to master)
 	go ButtonSender(btnReassignChan, btnCabChan, masterReceiveChan)
@@ -87,7 +87,7 @@ func StartManager(elevatorID int, portNumber int) {
 }
 
 // This function receives updates relative to the elevator from the elevator itself and updates the worldview
-func elevatorListener(elevatorCh chan utils.Elevator) {
+func elevatorListener(elevatorCh chan utils.Elevator, btnReassignChan chan utils.ButtonMessage) {
 
 	for {
 		select {
@@ -96,12 +96,31 @@ func elevatorListener(elevatorCh chan utils.Elevator) {
 			WorldViewMutex.Lock()
 			WorldView.Elevators[WorldView.ElevatorID] = e
 			WorldViewMutex.Unlock()
+			if e.Obstructed {
+
+				// We wait for the master to receive the obstruction
+
+				time.Sleep(500 * time.Millisecond)
+				for floor := 0; floor < utils.N_FLOORS; floor++ {
+					for btn := 0; btn < utils.N_BUTTONS-1; btn++ {
+						if e.Requests[floor][btn] {
+							btnReassignChan <- utils.ButtonMessage{
+								ButtonEvent: elevio.ButtonEvent{
+									Floor: floor,
+									Button: elevio.ButtonType(btn),
+								},
+								ElevatorID: WorldView.ElevatorID,
+								}
+							}
+						}
+					}
+				}
+			}
 
 			// We update the lights when our elevator updates
 			UpdateLights()
 		}
 	}
-}
 
 // This function listens to the other elevator world views and does a bunch of things
 func bcastListener(btnReassignChan chan utils.ButtonMessage, masterReceiveChan chan utils.ButtonMessage, masterSendChan chan utils.ButtonMessage) {
@@ -298,7 +317,7 @@ func bcastListener(btnReassignChan chan utils.ButtonMessage, masterReceiveChan c
 
 // This function checks if an elevator changed from what we have in the world view
 func differentElevator(el1 utils.Elevator, el2 utils.Elevator) bool {
-	if el1.Floor != el2.Floor || el1.Dirn != el2.Dirn || el1.Behaviour != el2.Behaviour {
+	if el1.Floor != el2.Floor || el1.Dirn != el2.Dirn || el1.Behaviour != el2.Behaviour || el1.Obstructed != el2.Obstructed {
 		return true
 	}
 	for floor := 0; floor < utils.N_FLOORS; floor++ {

@@ -148,7 +148,9 @@ func callAlreadyAssigned(btnMsg utils.ButtonMessage) bool {
 		// For hall calls we check if its assigned to any elevator
 		for el := 0; el < utils.N_ELEVATORS; el++ {
 			WorldViewMutex.Lock()
-			if WorldView.Alive[el] && WorldView.Elevators[el].Requests[btnMsg.ButtonEvent.Floor][btnMsg.ButtonEvent.Button] {
+			if WorldView.Alive[el] && !WorldView.Elevators[el].Obstructed && WorldView.Elevators[el].Requests[btnMsg.ButtonEvent.Floor][btnMsg.ButtonEvent.Button] {
+				fmt.Println("Call already assigned to", el)
+				fmt.Println("Is obstructed?", WorldView.Elevators[el].Obstructed)
 				alreadyAssigned = true
 			}
 			WorldViewMutex.Unlock()

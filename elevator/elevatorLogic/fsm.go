@@ -81,14 +81,15 @@ func FsmOnFloorArrival(newFloor int) {
 
 // This function is called when the timer times out
 func FsmOnDoorTimeout() {
-
 	// If theres an obstruction close the door
+	
 	if elevio.GetObstruction() {
 		TimerStart(utils.DOOR_OPEN_DURATION)
 		elevator.Obstructed = true
 		return
 	}
 	elevator.Obstructed = false
+	
 
 	if elevator.Behaviour == utils.EB_DoorOpen {
 		pair := requestsChooseDirection(elevator)

@@ -33,6 +33,8 @@ func StartElevator(buttonCh chan elevio.ButtonEvent, elevatorCh chan utils.Eleva
 	// Sends the elevator to the elevatorManager that updates the world view
 	elevatorCh <- GetElevator()
 
+	go obstructionManager(elevatorCh)
+
 	for {
 		select {
 		// When a button is pressed the elevator processes it and then updates the world view through elevatorCh
@@ -50,6 +52,25 @@ func StartElevator(buttonCh chan elevio.ButtonEvent, elevatorCh chan utils.Eleva
 				FsmOnDoorTimeout()
 				elevatorCh <- elevator
 			}
+		}
+	}
+}
+
+func obstructionManager(elevatorCh chan utils.Elevator){
+	for {
+		if elevio.GetObstruction() != elevator.Obstructed {
+			elevator.Obstructed = elevio.GetObstruction()
+			elevatorCh <- elevator
+
+			time.Sleep(1 * time.Second)
+
+			for floor := 0; floor < utils.N_FLOORS; floor++ {
+				for btn := 0; btn < utils.N_BUTTONS-1; btn++ {
+					elevator.Requests[floor][btn] = false
+				}
+			}
+
+			elevatorCh <- elevator
 		}
 	}
 }
