@@ -119,11 +119,6 @@ func bcastListener(btnReassignChan chan utils.ButtonMessage) {
 
 	for {
 
-		//fmt.Println("Listening")
-
-		// Start the timer
-		start := time.Now()
-
 		// Set master and backup as not found
 		masterFound := false
 		backupFound := false
@@ -134,7 +129,10 @@ func bcastListener(btnReassignChan chan utils.ButtonMessage) {
 		}
 
 		// Listen to broadcasts for 1 second
-		for time.Since(start) < time.Second {
+
+		timeout := time.After(1 * time.Second)
+		done := false
+		for !done {
 
 			select {
 
@@ -191,7 +189,12 @@ func bcastListener(btnReassignChan chan utils.ButtonMessage) {
 				// Set the received as true when receiving signal
 				received[wv.ElevatorID] = true
 
+			case <-timeout:
+				// Exit the select after 1 second
+				done = true
 			}
+
+			
 		}
 
 		// After listening for 1 second, we update which elevators are alive
