@@ -74,7 +74,7 @@ func ButtonSender(btnReassignChan chan utils.ButtonMessage, btnCabChan chan elev
 					go elevatorSenderUntilConfirmation(utils.ButtonMessage{
 						ButtonEvent: btnEvent,
 						ElevatorID:  WorldView.ElevatorID,
-					})
+					}, btnChan)
 				}
 			}
 
@@ -85,14 +85,14 @@ func ButtonSender(btnReassignChan chan utils.ButtonMessage, btnCabChan chan elev
 			go elevatorSenderUntilConfirmation(utils.ButtonMessage{
 				ButtonEvent: btnMsg.ButtonEvent,
 				ElevatorID:  btnMsg.ElevatorID,
-			})
+			}, btnChan)
 
 		}
 	}
 }
 
 // This function sends the button press to the master until a confirmation is received
-func elevatorSenderUntilConfirmation(btnMsg utils.ButtonMessage) {
+func elevatorSenderUntilConfirmation(btnMsg utils.ButtonMessage, btnChan chan elevio.ButtonEvent) {
 
 	// Channels and broadcasts to send button presses to the master and receive the confirmation
 	sendChan := make(chan utils.ButtonMessage)
@@ -114,6 +114,7 @@ func elevatorSenderUntilConfirmation(btnMsg utils.ButtonMessage) {
 			}
 		case <-ticker.C:
 			if WorldView.Role == utils.MASTER {
+				btnChan <- btnMsg.ButtonEvent
 				return
 			}
 			fmt.Println("Confirmation from MASTER not received")

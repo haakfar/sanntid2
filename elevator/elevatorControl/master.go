@@ -43,15 +43,19 @@ func RunMaster(quitChan chan bool, masterReceiveChan chan utils.ButtonMessage, m
 
 				// If its a hall call its assiged to an elevator based on that the assigner says
 				btnMsg.ElevatorID = FindBestElevator(btnMsg.ButtonEvent)
-				if btnMsg.ElevatorID == -1 {
+				if btnMsg.ElevatorID == -1 || btnMsg.ElevatorID == WorldView.ElevatorID{
 					btnMsg.ElevatorID = WorldView.ElevatorID
+					masterSendChan <- btnMsg
+				} else {
+					go masterSenderUntilConfirmation(btnMsg)
 				}
 				fmt.Println("Assigned hall call to", btnMsg.ElevatorID)
-				go masterSenderUntilConfirmation(btnMsg)
 			}
 
 		case btnMsg := <-masterReceiveChan:
+			fmt.Println("Received call as master")
 			// If the call is already assigned we ignore it
+
 			if callAlreadyAssigned(btnMsg) {
 				fmt.Println("Call already assigned")
 				break
@@ -66,9 +70,14 @@ func RunMaster(quitChan chan bool, masterReceiveChan chan utils.ButtonMessage, m
 			} else {
 
 				// If its a hall call its assiged to an elevator based on that the assigner says
-				//btnMsg.ElevatorID = FindBestElevator(btnMsg.ButtonEvent)
+				btnMsg.ElevatorID = FindBestElevator(btnMsg.ButtonEvent)				
+				if btnMsg.ElevatorID == -1 || btnMsg.ElevatorID == WorldView.ElevatorID{
+					btnMsg.ElevatorID = WorldView.ElevatorID
+					masterSendChan <- btnMsg
+				} else {
+					go masterSenderUntilConfirmation(btnMsg)
+				}
 				fmt.Println("Assigned hall call to", btnMsg.ElevatorID)
-				masterSendChan <- btnMsg
 			}
 
 		// When an elevator demotes it terminates
