@@ -18,6 +18,7 @@ type Elevator struct {
 	Behaviour ElevatorBehaviour
 	Requests  [][]bool 
 	Obstructed bool
+	MotorStopped bool
 }
 
 // World view structure

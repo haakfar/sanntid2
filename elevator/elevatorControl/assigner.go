@@ -12,7 +12,7 @@ func FindBestElevator(btnEvent elevio.ButtonEvent) int {
 	minEl := -1
 	for el := 0; el < utils.N_ELEVATORS; el++ {
 		WorldViewMutex.Lock()
-		if WorldView.Alive[el] {
+		if WorldView.Alive[el] && !WorldView.Elevators[el].Obstructed && !WorldView.Elevators[el].MotorStopped {
 			WorldViewMutex.Unlock()
 			if minEl == -1 {
 				minEl = el
@@ -47,6 +47,7 @@ func calcTime(elevator utils.Elevator, btnEvent elevio.ButtonEvent) float64 {
 	elevSim.Dirn = elevator.Dirn
 	elevSim.Behaviour = elevator.Behaviour
 	elevSim.Obstructed = elevator.Obstructed
+	elevSim.MotorStopped = elevator.MotorStopped
 
 	elevSim.Requests = make([][]bool, utils.N_FLOORS)
 	for i := range elevSim.Requests {
@@ -67,7 +68,7 @@ func calcTime(elevator utils.Elevator, btnEvent elevio.ButtonEvent) float64 {
 	}
 
 	// If the elevator is obstructed we add 60 seconds so that it wont be prioritized
-	if elevSim.Obstructed {
+	if elevSim.Obstructed || elevSim.MotorStopped{
 		time += 500
 	}
 

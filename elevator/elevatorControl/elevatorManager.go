@@ -33,6 +33,7 @@ func init() {
 			Behaviour:  0,
 			Requests:   requests,
 			Obstructed: false,
+			MotorStopped: false,
 		}
 	}
 }
@@ -110,17 +111,32 @@ func elevatorListener(elevatorCh chan utils.Elevator, btnReassignChan chan utils
 									Button: elevio.ButtonType(btn),
 								},
 								ElevatorID: WorldView.ElevatorID,
-								}
+							}
+						}
+					}
+				}
+			} else if e.MotorStopped {
+				fmt.Println("Elevator stopped")
+				time.Sleep(500 * time.Millisecond)
+				for floor := 0; floor < utils.N_FLOORS; floor++ {
+					for btn := 0; btn < utils.N_BUTTONS-1; btn++ {
+						if e.Requests[floor][btn] {
+							btnReassignChan <- utils.ButtonMessage{
+								ButtonEvent: elevio.ButtonEvent{
+									Floor: floor,
+									Button: elevio.ButtonType(btn),
+								},
+								ElevatorID: WorldView.ElevatorID,
 							}
 						}
 					}
 				}
 			}
-
 			// We update the lights when our elevator updates
 			UpdateLights()
 		}
 	}
+}
 
 // This function listens to the other elevator world views and does a bunch of things
 func bcastListener(btnReassignChan chan utils.ButtonMessage, masterReceiveChan chan utils.ButtonMessage, masterSendChan chan utils.ButtonMessage) {
@@ -317,7 +333,7 @@ func bcastListener(btnReassignChan chan utils.ButtonMessage, masterReceiveChan c
 
 // This function checks if an elevator changed from what we have in the world view
 func differentElevator(el1 utils.Elevator, el2 utils.Elevator) bool {
-	if el1.Floor != el2.Floor || el1.Dirn != el2.Dirn || el1.Behaviour != el2.Behaviour || el1.Obstructed != el2.Obstructed {
+	if el1.Floor != el2.Floor || el1.Dirn != el2.Dirn || el1.Behaviour != el2.Behaviour || el1.Obstructed != el2.Obstructed || el1.MotorStopped != el2.MotorStopped {
 		return true
 	}
 	for floor := 0; floor < utils.N_FLOORS; floor++ {

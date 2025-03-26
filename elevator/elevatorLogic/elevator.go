@@ -35,6 +35,8 @@ func StartElevator(buttonCh chan elevio.ButtonEvent, elevatorCh chan utils.Eleva
 
 	go obstructionManager(elevatorCh)
 
+	go detectMotorStop(elevatorCh)
+
 	for {
 		select {
 		// When a button is pressed the elevator processes it and then updates the world view through elevatorCh
@@ -45,6 +47,7 @@ func StartElevator(buttonCh chan elevio.ButtonEvent, elevatorCh chan utils.Eleva
 			// When the elevator arrives at a floor it processes it and then updates the world view
 			FsmOnFloorArrival(f)
 			elevatorCh <- elevator
+			fmt.Println("Arrived on floor",f)
 		case <-ticker.C:
 			// When the timer times out, the elevator processes it and then updates the world view
 			if TimerTimedOut() {
@@ -56,23 +59,84 @@ func StartElevator(buttonCh chan elevio.ButtonEvent, elevatorCh chan utils.Eleva
 	}
 }
 
+func removeHallCalls(elevatorCh chan utils.Elevator){
+	elevatorCh <- elevator
+
+	time.Sleep(1 * time.Second)
+
+	for floor := 0; floor < utils.N_FLOORS; floor++ {
+		for btn := 0; btn < utils.N_BUTTONS-1; btn++ {
+			elevator.Requests[floor][btn] = false
+		}
+	}
+
+	elevatorCh <- elevator
+}
+
 func obstructionManager(elevatorCh chan utils.Elevator){
 	for {
 		if elevio.GetObstruction() != elevator.Obstructed {
 			elevator.Obstructed = elevio.GetObstruction()
-			elevatorCh <- elevator
+			if elevator.Obstructed {
 
-			time.Sleep(1 * time.Second)
+				go removeHallCalls(elevatorCh)
 
-			for floor := 0; floor < utils.N_FLOORS; floor++ {
-				for btn := 0; btn < utils.N_BUTTONS-1; btn++ {
-					elevator.Requests[floor][btn] = false
-				}
+			} else {
+				elevatorCh <- elevator
 			}
 
-			elevatorCh <- elevator
 		}
 	}
+}
+
+func detectMotorStop(elevatorCh chan utils.Elevator) {
+	const timeout = 4 * time.Second
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	lastFloor := elevator.Floor
+	lastChange := time.Now()
+
+	for {
+		<-ticker.C
+
+		if elevator.Floor != lastFloor {
+			lastFloor = elevator.Floor
+			lastChange = time.Now()
+		}
+
+		if elevator.Behaviour == utils.EB_Idle || elevator.Behaviour == utils.EB_DoorOpen {
+			lastChange = time.Now()
+		}
+
+
+		if elevator.Dirn != elevio.MD_Stop && time.Since(lastChange) > timeout {
+			
+			if !elevator.MotorStopped {
+				fmt.Println("Motor stopped")
+				elevator.MotorStopped = true
+				go removeHallCalls(elevatorCh)
+				detectMotorRestart(elevatorCh)
+			}
+		}
+	}
+}
+
+func detectMotorRestart(elevatorCh chan utils.Elevator){
+	lastFloor := elevator.Floor
+
+	fmt.Println("Detecting restart?")
+	
+	for {
+		if elevator.Floor != lastFloor {
+			fmt.Println("Motor restarted")
+			elevator.MotorStopped = false
+			elevatorCh <- elevator
+			break
+		}
+	}
+
+	detectMotorStop(elevatorCh)
 }
 
 // Function to initialize the elevator
@@ -86,5 +150,7 @@ func ElevatorUninitialized() utils.Elevator {
 		Dirn:      elevio.MD_Stop,
 		Behaviour: utils.EB_Idle,
 		Requests:  req,
+		Obstructed: false,
+		MotorStopped: false,
 	}
 }
