@@ -3,6 +3,7 @@ package elevatorControl
 import (
 	"Utils/utils"
 	"Driver-go/elevio"
+	"math"
 )
 
 // This is the assigner, very messy but it seems to work fine
@@ -37,104 +38,148 @@ func calcTime(elevator utils.Elevator, btnEvent elevio.ButtonEvent) float64 {
 
 	// if elevator is still its just the time to get to the floor
 	if elevator.Behaviour == utils.EB_Idle {
-		return float64(abs(elevator.Floor-btnEvent.Floor)) * 2.5
+		return math.Abs(float64(elevator.Floor-btnEvent.Floor)) * 2.5
 	}
 
-	// we create a copy of the elevator (this is a bad way to do it)
+	// we create a copy of the elevator 
 
-	var elevSim utils.Elevator
-	elevSim.Floor = elevator.Floor
-	elevSim.Dirn = elevator.Dirn
-	elevSim.Behaviour = elevator.Behaviour
-	elevSim.Obstructed = elevator.Obstructed
-	elevSim.MotorStopped = elevator.MotorStopped
+	elevSim := elevator
 
-	elevSim.Requests = make([][]bool, utils.N_FLOORS)
-	for i := range elevSim.Requests {
-		elevSim.Requests[i] = make([]bool, utils.N_BUTTONS)
-	}
-
-	for floor := 0; floor < utils.N_FLOORS; floor++ {
-		for btn := 0; btn < utils.N_BUTTONS; btn++ {
-			elevSim.Requests[floor][btn] = elevator.Requests[floor][btn]
-		}
+	elevSim.Requests = make([][]bool, len(elevator.Requests))
+	for i := range elevator.Requests {
+		elevSim.Requests[i] = append([]bool{}, elevator.Requests[i]...) 
 	}
 	elevSim.Requests[btnEvent.Floor][btnEvent.Button] = true
-	time := 0.0
 
-	// If the door is open we add 3 seconds for it to close
-	if elevSim.Behaviour == utils.EB_DoorOpen {
-		time += 3
+	time:=0.0
+
+	switch(elevSim.Behaviour){
+	case utils.EB_Moving:
+		time+= 1.25 // It takes about 2.5 seconds to move floors so if the elevator is moving we put half the time
+		switch (elevSim.Dirn){
+		case elevio.MD_Up:
+			elevSim.Floor++
+		case elevio.MD_Down:
+			elevSim.Floor--
+		}
+	case utils.EB_DoorOpen:
+		time+= 1.5 // Doors stay open for 3 seconds so if the elevator has its doors open we put half the time
 	}
 
-	// If the elevator is obstructed we add 60 seconds so that it wont be prioritized
-	if elevSim.Obstructed || elevSim.MotorStopped{
-		time += 500
+	// Sometimes the floor gets outside the possible values so we fix it
+	if elevSim.Floor<0 {
+		elevSim.Floor = 0
+	}
+	if elevSim.Floor>3 {
+		elevSim.Floor = 3
 	}
 
-	/*
-	Sometimes this starts looping and I don't know why, so, instead of fixing the problem (I tried)
-	we make sure that if the function loops enough times it exits the loop
-	*/
+	// Sometimes the loop gets stuck so we count the loops and when it gets stuck we exit with a high time
+	// Of course its not ideal but it gets the job done
+	loops:=0 
 
-	loops := 0
 	for {
 
-		// If loop >= 50, the function got stuck so we return a high value of time
-		if loops >= 50 {return 400}
+		if loops>=50 {
+			// If we're here it means the loop probably got stuck so we return 500 
+			return 500
+		}
 
-		// We get currentTop and bottom Destination
-		topDest := getTopDestination(elevSim)
-		bottomDest := getBottomDestination(elevSim)
+		// If we should stop on the floor we clear the clearable requests 
+		if shouldStop(elevSim) {
+			elevSim = clearRequests(elevSim)
 
-		// If we are at a floor and one of those conditions is true we can stop
-		if elevSim.Floor == btnEvent.Floor {
-			if btnEvent.Button == elevio.BT_Cab || (elevSim.Dirn == elevio.MD_Up && btnEvent.Button == elevio.BT_HallUp) || (elevSim.Dirn == elevio.MD_Down && btnEvent.Button == elevio.BT_HallDown) || btnEvent.Floor == topDest || btnEvent.Floor == bottomDest || topDest == bottomDest {
-
+			if !elevSim.Requests[btnEvent.Floor][btnEvent.Button] {
+				// If we cleared the request of the button event we return
 				return time
 			}
+
+			// Otherwise we add the door opening time and decide the next direction
+			time += 3
+			elevSim.Dirn = getDirection(elevSim)
 		}
 
-		// If we are stopping at this floor we have served the request and must wait 3 seconds
-		if elevSim.Requests[elevSim.Floor][elevio.BT_Cab] {
-			time += 3
-			elevSim.Requests[elevSim.Floor][elevio.BT_Cab] = false
-		}
-		if elevSim.Requests[elevSim.Floor][elevio.BT_HallUp] && elevSim.Dirn == elevio.MD_Up {
-			time += 3
-			elevSim.Requests[elevSim.Floor][elevio.BT_HallUp] = false
-		}
-		if elevSim.Requests[elevSim.Floor][elevio.BT_HallDown] && elevSim.Dirn == elevio.MD_Down {
-			time += 3
-			elevSim.Requests[elevSim.Floor][elevio.BT_HallDown] = false
-		}
-
-		// If we reached the top or the bottom we have to change direction
-		if elevSim.Floor >= topDest || elevSim.Floor == 3 {
-			elevSim.Dirn = elevio.MD_Down
-		} else if elevSim.Floor <= bottomDest || elevSim.Floor == 0 {
-			elevSim.Dirn = elevio.MD_Up
-		}
-
-		// We move floors according to the direction (it takes about 2.5 seconds)
-		if elevSim.Dirn == elevio.MD_Up {
-			time += 2.5
+		// Moving floors
+		switch (elevSim.Dirn){
+		case elevio.MD_Up:
 			elevSim.Floor++
-		} else if elevSim.Dirn == elevio.MD_Down {
-			time += 2.5
+		case elevio.MD_Down:
 			elevSim.Floor--
 		}
 
-		loops++;
+		// Fixing floor position if it gets stuck
+		if elevSim.Floor<0 {
+			elevSim.Floor = 0
+		}
+		if elevSim.Floor>3 {
+			elevSim.Floor = 3
+		}
+
+		// The elevator takes about 2.5 seconds to move floors
+		time+=2.5
+
+		loops++
 	}
 }
 
-// Abs function since GO wants floats and I don't want to cast type
-func abs(n int) int {
-	if n < 0 {
-		return -n
+// This function gets the next direction the elevator should take
+func getDirection(elevator utils.Elevator) elevio.MotorDirection {
+	switch elevator.Dirn {
+	case elevio.MD_Up:
+		if elevator.Floor < getTopDestination(elevator) {
+			return elevio.MD_Up
+		} else {
+			return elevio.MD_Down
+		}
+	case elevio.MD_Down:
+		if elevator.Floor > getBottomDestination(elevator) {
+			return elevio.MD_Down
+		} else {
+			return elevio.MD_Up
+		}
+	case elevio.MD_Stop:
+		if elevator.Floor < getTopDestination(elevator) {
+			return elevio.MD_Up
+		} else if elevator.Floor > getBottomDestination(elevator) {
+			return elevio.MD_Down
+		} else {
+			return elevio.MD_Stop
+		}
 	}
-	return n
+	return elevio.MD_Stop
+}
+
+// This function decides whether the elevator should stop
+func shouldStop(elevator utils.Elevator) bool {
+	switch elevator.Dirn {
+	case elevio.MD_Down:
+		return elevator.Requests[elevator.Floor][elevio.BT_HallDown] || elevator.Requests[elevator.Floor][elevio.BT_Cab] || elevator.Floor == getBottomDestination(elevator)
+	case elevio.MD_Up:
+		return elevator.Requests[elevator.Floor][elevio.BT_HallUp] || elevator.Requests[elevator.Floor][elevio.BT_Cab] || elevator.Floor == getTopDestination(elevator)
+	default:
+		return true
+	}
+}
+
+// This function clears the clearable requests on the floor
+func clearRequests(elevator utils.Elevator) utils.Elevator{
+	elevator.Requests[elevator.Floor][elevio.BT_Cab] = false
+	switch elevator.Dirn {
+	case elevio.MD_Up:
+		if elevator.Floor == getTopDestination(elevator) && !elevator.Requests[elevator.Floor][int(elevio.BT_HallUp)] {
+			elevator.Requests[elevator.Floor][int(elevio.BT_HallDown)] = false
+		}
+		elevator.Requests[elevator.Floor][int(elevio.BT_HallUp)] = false
+	case elevio.MD_Down:
+		if elevator.Floor == getBottomDestination(elevator) && !elevator.Requests[elevator.Floor][int(elevio.BT_HallDown)] {
+			elevator.Requests[elevator.Floor][int(elevio.BT_HallUp)] = false
+		}
+		elevator.Requests[elevator.Floor][int(elevio.BT_HallDown)] = false
+	default:
+		elevator.Requests[elevator.Floor][int(elevio.BT_HallUp)] = false
+		elevator.Requests[elevator.Floor][int(elevio.BT_HallDown)] = false
+	}
+	return elevator
 }
 
 // Function to get the current top destination of the elevator

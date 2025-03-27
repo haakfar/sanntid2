@@ -11,6 +11,7 @@ import (
 // This function receives button broadcasts from the master and sends them to the elevator
 // It also sends a confirmation to the master
 // It also receives cab calls from ButtonSender and sends them to the elevator
+// If the elevator is the master, it receives via channel instead
 func ButtonListener(btnCh chan elevio.ButtonEvent, btnCabChan chan elevio.ButtonEvent, btnMasterChan chan utils.ButtonMessage) {
 
 	// Channel and broadcasts to receive the button press from the master and send the confirmation
@@ -34,16 +35,16 @@ func ButtonListener(btnCh chan elevio.ButtonEvent, btnCabChan chan elevio.Button
 			}
 		case btnEvent := <- btnCabChan:
 
+			// If its a cab call we send it to the elevator
 			btnCh <- btnEvent
 
 			UpdateLights()
 
 		case btnMsg := <- btnMasterChan:
+
+			// If we are here it means the call is for us 
 			btnCh <- btnMsg.ButtonEvent
 
-			//WorldViewMutex.Lock()
-			//WorldView.Elevators[WorldView.ElevatorID]
-			//WorldViewMutex.Unlock()
 			UpdateLights()
 		}
 	}
@@ -53,6 +54,7 @@ func ButtonListener(btnCh chan elevio.ButtonEvent, btnCabChan chan elevio.Button
 // It also listens to reassigned hall calls when an elevator dies (and cab calls when an elevator comes back) and broadcasts them
 // When a button is pressed we send it to the master untile we receive a confirmation
 // If its a cab call its sent to the listener that sends to the elevator
+// If the elevator is master, the calls are sent via channel instead
 func ButtonSender(btnReassignChan chan utils.ButtonMessage, btnCabChan chan elevio.ButtonEvent, btnMasterChan chan utils.ButtonMessage) {
 
 	btnChan := make(chan elevio.ButtonEvent)
@@ -62,26 +64,30 @@ func ButtonSender(btnReassignChan chan utils.ButtonMessage, btnCabChan chan elev
 		// This is for calls sent by the elevator
 		case btnEvent := <-btnChan:
 
-			if WorldView.Role == utils.MASTER {
+			// If its a cab call its sent to the listener
+			if btnEvent.Button == elevio.BT_Cab {
+				btnCabChan <- btnEvent
+			} else if WorldView.Role == utils.MASTER {
+
+				// If we are master we send it via channel
 				btnMasterChan <- utils.ButtonMessage{
 					ButtonEvent: btnEvent,
 					ElevatorID:  WorldView.ElevatorID,
 				}
-			} else {			
-				if btnEvent.Button == elevio.BT_Cab {
-					btnCabChan <- btnEvent
-				} else {
-					go elevatorSenderUntilConfirmation(utils.ButtonMessage{
-						ButtonEvent: btnEvent,
-						ElevatorID:  WorldView.ElevatorID,
-					}, btnChan)
-				}
+			} else {	
+
+				// Otherwise we broadcast
+				go elevatorSenderUntilConfirmation(utils.ButtonMessage{
+					ButtonEvent: btnEvent,
+					ElevatorID:  WorldView.ElevatorID,
+				}, btnChan)
 			}
 
-
-
 		case btnMsg := <-btnReassignChan:
+
 			// This is for reassigned calls
+
+			// If we are master we send via channel, otherwise via broadcast
 			if WorldView.Role == utils.MASTER {
 				btnMasterChan <- btnMsg
 			} else {
@@ -105,7 +111,7 @@ func elevatorSenderUntilConfirmation(btnMsg utils.ButtonMessage, btnChan chan el
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 
-	// Every second we send the button press until we receive the confirmation from the master
+	// Every 50ms we send the button press until we receive the confirmation from the master
 	for {
 		sendChan <- btnMsg
 		select {

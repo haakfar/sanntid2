@@ -22,6 +22,8 @@ func RunMaster(quitChan chan bool, masterReceiveChan chan utils.ButtonMessage, m
 	for {
 		// Every time a button is pressed its sent to the master
 		select {
+
+		// If we receive a button pressi via broadcast
 		case btnMsg := <-receiveChan:
 
 			// We send the confirmation back
@@ -36,6 +38,8 @@ func RunMaster(quitChan chan bool, masterReceiveChan chan utils.ButtonMessage, m
 			if btnMsg.ButtonEvent.Button == elevio.BT_Cab {
 
 				// If its a cab call its assigned to the elevator that sent it
+				// NOTE: this is for reassigning calls, when an elevator that had cab calls comes back
+				// Normally cab calls should be managed by the elevator
 				fmt.Println("Assigned cab call to", btnMsg.ElevatorID)
 				go masterSenderUntilConfirmation(btnMsg)
 
@@ -43,18 +47,23 @@ func RunMaster(quitChan chan bool, masterReceiveChan chan utils.ButtonMessage, m
 
 				// If its a hall call its assiged to an elevator based on that the assigner says
 				btnMsg.ElevatorID = FindBestElevator(btnMsg.ButtonEvent)
+
+				// If we don't find any good elevator, or the call is assigned to us (the master), we send it back via channel 
 				if btnMsg.ElevatorID == -1 || btnMsg.ElevatorID == WorldView.ElevatorID{
 					btnMsg.ElevatorID = WorldView.ElevatorID
 					masterSendChan <- btnMsg
 				} else {
+					// Otherwise the call will be sent via broadcast
 					go masterSenderUntilConfirmation(btnMsg)
 				}
 				fmt.Println("Assigned hall call to", btnMsg.ElevatorID)
 			}
 
 		case btnMsg := <-masterReceiveChan:
+
+			// This is for when the calls are pressed on the master's keypad, its very similar to the other
+			// So the comments will be put only when theres a difference
 			fmt.Println("Received call as master")
-			// If the call is already assigned we ignore it
 
 			if callAlreadyAssigned(btnMsg) {
 				fmt.Println("Call already assigned")
@@ -67,15 +76,16 @@ func RunMaster(quitChan chan bool, masterReceiveChan chan utils.ButtonMessage, m
 				fmt.Println("Assigned cab call to", btnMsg.ElevatorID)
 
 				if btnMsg.ElevatorID == WorldView.ElevatorID {
-
+					// If its assigned to us its sent via channel
 					masterSendChan <- btnMsg
 				} else {
+					// Otherwise it will be broadcasted
 					go masterSenderUntilConfirmation(btnMsg)
 				}
 
 			} else {
 
-				// If its a hall call its assiged to an elevator based on that the assigner says
+				// Same as before (i think)
 				btnMsg.ElevatorID = FindBestElevator(btnMsg.ButtonEvent)				
 				if btnMsg.ElevatorID == -1 || btnMsg.ElevatorID == WorldView.ElevatorID{
 					btnMsg.ElevatorID = WorldView.ElevatorID
@@ -107,7 +117,7 @@ func masterSenderUntilConfirmation(btnMsg utils.ButtonMessage) {
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 
-	// Every second we send the button press until we receive the confirmation from the elevator
+	// Every 50ms we send the button press until we receive the confirmation from the elevator
 	for {
 		sendChan <- btnMsg
 		select {
@@ -122,7 +132,7 @@ func masterSenderUntilConfirmation(btnMsg utils.ButtonMessage) {
 				return
 			}
 
-			// If the assigned elevator is not alive anymore we must terminate (it should be assigned again)
+			// If the assigned elevator is not alive anymore we must terminate the sending (it should be assigned again)
 			WorldViewMutex.Lock()
 			if !WorldView.Alive[btnMsg.ElevatorID] {
 				WorldViewMutex.Unlock()

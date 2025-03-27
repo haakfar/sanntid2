@@ -60,8 +60,10 @@ func StartManager(elevatorID int, portNumber int) {
 	// Channel to send cab calls from the sender to the listener
 	btnCabChan := make(chan elevio.ButtonEvent)
 
+	// Channel the elevator uses to send orders to the master.go file (when the elevator is MASTER)
 	masterSendChan := make(chan utils.ButtonMessage)
 
+	// Channel the elevator uses to receive orders from the master.go file (when the elevator is MASTER)
 	masterReceiveChan := make(chan utils.ButtonMessage)
 
 	// Button listen function (listens from the master and sends to elevator)
@@ -102,9 +104,12 @@ func elevatorListener(elevatorCh chan utils.Elevator, btnReassignChan chan utils
 			WorldViewMutex.Unlock()
 			if e.Obstructed {
 
-				// We wait for the master to receive the obstruction
+				// If the elevator is obstructed we wait for 500 ms so that the master can receive
+				// the update and not assign the calls to this elevator
 
 				time.Sleep(500 * time.Millisecond)
+
+				// After waiting we reassign all the hall requests
 				for floor := 0; floor < utils.N_FLOORS; floor++ {
 					for btn := 0; btn < utils.N_BUTTONS-1; btn++ {
 						if e.Requests[floor][btn] {
@@ -119,6 +124,9 @@ func elevatorListener(elevatorCh chan utils.Elevator, btnReassignChan chan utils
 					}
 				}
 			} else if e.MotorStopped {
+
+				// Same as the obstruction, we wait for the master to receive the update and
+				// then reassign the hall calls
 				time.Sleep(500 * time.Millisecond)
 				for floor := 0; floor < utils.N_FLOORS; floor++ {
 					for btn := 0; btn < utils.N_BUTTONS-1; btn++ {
@@ -134,6 +142,7 @@ func elevatorListener(elevatorCh chan utils.Elevator, btnReassignChan chan utils
 					}
 				}
 			}
+
 			// We update the lights when our elevator updates
 			UpdateLights()
 		}
@@ -348,7 +357,7 @@ func differentElevator(el1 utils.Elevator, el2 utils.Elevator) bool {
 	return false
 }
 
-// This function broadcasts the world view every 200 ms
+// This function broadcasts the world view every 50 ms
 func bcastSender() {
 
 	// This channel is to send the world view

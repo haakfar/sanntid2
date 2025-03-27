@@ -33,9 +33,9 @@ func StartElevator(buttonCh chan elevio.ButtonEvent, elevatorCh chan utils.Eleva
 	// Sends the elevator to the elevatorManager that updates the world view
 	elevatorCh <- GetElevator()
 
-	go obstructionManager(elevatorCh)
+	go obstructionDetector(elevatorCh)
 
-	go detectMotorStop(elevatorCh)
+	go motorStopDetector(elevatorCh)
 
 	for {
 		select {
@@ -45,19 +45,8 @@ func StartElevator(buttonCh chan elevio.ButtonEvent, elevatorCh chan utils.Eleva
 			elevatorCh <- elevator
 		case f := <-floorCh:
 			// When the elevator arrives at a floor it processes it and then updates the world view
-			/*
-			if elevator.MotorStopped {
-				fmt.Println("Motor restarted")
-				elevator.MotorStopped = false
-				elevio.SetMotorDirection(elevio.MD_Stop)
-				elevator.Dirn = elevio.MD_Stop
-				elevator.Behaviour = utils.EB_Idle
-			}
-				*/
 			FsmOnFloorArrival(f)
-
 			elevatorCh <- elevator
-			//fmt.Println("Arrived on floor",f)
 		case <-ticker.C:
 			// When the timer times out, the elevator processes it and then updates the world view
 			if TimerTimedOut() {
@@ -69,29 +58,43 @@ func StartElevator(buttonCh chan elevio.ButtonEvent, elevatorCh chan utils.Eleva
 	}
 }
 
+// This function is called when an obstruction or a motor stop is detected
+// We update the worldview of the obstruction/motor stop, we wait for 1 second
+// to make sure that the worldview is updated for all elevators and that the calls
+// have been reassigned and then we remove the hall calls and update the worldview again
 func removeHallCalls(elevatorCh chan utils.Elevator){
+	// Updating worldview
 	elevatorCh <- elevator
 
+	// Waiting 1 sec for everything to update (its a relatively long wait but its just to make sure even with packetloss)
 	time.Sleep(1 * time.Second)
 
+	// Removing hall calls
 	for floor := 0; floor < utils.N_FLOORS; floor++ {
 		for btn := 0; btn < utils.N_BUTTONS-1; btn++ {
 			elevator.Requests[floor][btn] = false
 		}
 	}
 
+	// Updating worldview
 	elevatorCh <- elevator
 }
 
-func obstructionManager(elevatorCh chan utils.Elevator){
+// This function manages the obstruction
+// When the obstruction is activated the hall calls are removed and everything is updated
+// When the obstruction is removed the worldview is updated
+func obstructionDetector(elevatorCh chan utils.Elevator){
 	for {
 		if elevio.GetObstruction() != elevator.Obstructed {
 			elevator.Obstructed = elevio.GetObstruction()
 			if elevator.Obstructed {
 
+				// If we have an obstruction we have to remove the hall calls
 				go removeHallCalls(elevatorCh)
 
 			} else {
+
+				// If we have don't have an obstruction anymore we update the world view
 				elevatorCh <- elevator
 			}
 
@@ -99,7 +102,9 @@ func obstructionManager(elevatorCh chan utils.Elevator){
 	}
 }
 
-func detectMotorStop(elevatorCh chan utils.Elevator) {
+// This function detects the motor stop
+// If the elevator is in a moving state but hasn't gotten to any new floor for 4 seconds it means it has stopped
+func motorStopDetector(elevatorCh chan utils.Elevator) {
 	const timeout = 4 * time.Second
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -109,23 +114,28 @@ func detectMotorStop(elevatorCh chan utils.Elevator) {
 
 	for {
 
+		// We check every 100ms
 		<-ticker.C
 
+		// If we got to a new floor we are not stopped
 		if elevator.Floor != lastFloor {
 			lastFloor = elevator.Floor
 			lastChange = time.Now()
 		}
 
+		// If the eleavtor is idle or has its doors open its not stopped
 		if elevator.Behaviour == utils.EB_Idle || elevator.Behaviour == utils.EB_DoorOpen {
 			lastChange = time.Now()
 		}
 
-
+		// If we are moving and its been more than 4sec since the last change the motor has stopped
 		if elevator.Dirn != elevio.MD_Stop && time.Since(lastChange) > timeout {
 			
 			if !elevator.MotorStopped {
 				fmt.Println("Motor stopped")
 				elevator.MotorStopped = true
+
+				// We remove the hall calls and update everything
 				go removeHallCalls(elevatorCh)
 			}
 		}
