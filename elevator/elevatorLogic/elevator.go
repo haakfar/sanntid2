@@ -45,9 +45,19 @@ func StartElevator(buttonCh chan elevio.ButtonEvent, elevatorCh chan utils.Eleva
 			elevatorCh <- elevator
 		case f := <-floorCh:
 			// When the elevator arrives at a floor it processes it and then updates the world view
+			/*
+			if elevator.MotorStopped {
+				fmt.Println("Motor restarted")
+				elevator.MotorStopped = false
+				elevio.SetMotorDirection(elevio.MD_Stop)
+				elevator.Dirn = elevio.MD_Stop
+				elevator.Behaviour = utils.EB_Idle
+			}
+				*/
 			FsmOnFloorArrival(f)
+
 			elevatorCh <- elevator
-			fmt.Println("Arrived on floor",f)
+			//fmt.Println("Arrived on floor",f)
 		case <-ticker.C:
 			// When the timer times out, the elevator processes it and then updates the world view
 			if TimerTimedOut() {
@@ -98,6 +108,7 @@ func detectMotorStop(elevatorCh chan utils.Elevator) {
 	lastChange := time.Now()
 
 	for {
+
 		<-ticker.C
 
 		if elevator.Floor != lastFloor {
@@ -116,27 +127,9 @@ func detectMotorStop(elevatorCh chan utils.Elevator) {
 				fmt.Println("Motor stopped")
 				elevator.MotorStopped = true
 				go removeHallCalls(elevatorCh)
-				detectMotorRestart(elevatorCh)
 			}
 		}
 	}
-}
-
-func detectMotorRestart(elevatorCh chan utils.Elevator){
-	lastFloor := elevator.Floor
-
-	fmt.Println("Detecting restart?")
-	
-	for {
-		if elevator.Floor != lastFloor {
-			fmt.Println("Motor restarted")
-			elevator.MotorStopped = false
-			elevatorCh <- elevator
-			break
-		}
-	}
-
-	detectMotorStop(elevatorCh)
 }
 
 // Function to initialize the elevator

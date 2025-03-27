@@ -95,6 +95,9 @@ func elevatorListener(elevatorCh chan utils.Elevator, btnReassignChan chan utils
 		// When we receive an update we update the world view
 		case e := <-elevatorCh:
 			WorldViewMutex.Lock()
+			if (e.MotorStopped != WorldView.Elevators[WorldView.ElevatorID].MotorStopped){
+				fmt.Println("Motor stopped?", e.MotorStopped)
+			}
 			WorldView.Elevators[WorldView.ElevatorID] = e
 			WorldViewMutex.Unlock()
 			if e.Obstructed {
@@ -116,7 +119,6 @@ func elevatorListener(elevatorCh chan utils.Elevator, btnReassignChan chan utils
 					}
 				}
 			} else if e.MotorStopped {
-				fmt.Println("Elevator stopped")
 				time.Sleep(500 * time.Millisecond)
 				for floor := 0; floor < utils.N_FLOORS; floor++ {
 					for btn := 0; btn < utils.N_BUTTONS-1; btn++ {

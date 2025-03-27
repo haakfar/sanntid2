@@ -67,7 +67,8 @@ func FsmOnFloorArrival(newFloor int) {
 
 	// It checks if the elevator should stop to serve a call
 	if elevator.Behaviour == utils.EB_Moving {
-		if requestsShouldStop(elevator) {
+		if requestsShouldStop(elevator) || elevator.MotorStopped{
+			elevator.MotorStopped = false
 			elevio.SetMotorDirection(elevio.MD_Stop)
 			elevio.SetDoorOpenLamp(true)
 			elevator = requestsClearAtCurrentFloor(elevator)
