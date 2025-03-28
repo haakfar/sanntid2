@@ -4,7 +4,7 @@ import (
 	"Utils/utils"
 	"Driver-go/elevio"
 	"Network-go/network/bcast"
-	"fmt"
+	//"fmt"
 	"time"
 )
 
@@ -128,7 +128,6 @@ func elevatorSenderUntilConfirmation(btnMsg utils.ButtonMessage, btnChan chan el
 				btnChan <- btnMsg.ButtonEvent
 				return
 			}
-			fmt.Println("Confirmation from MASTER not received")
 			
 		}
 	}

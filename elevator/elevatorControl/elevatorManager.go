@@ -102,9 +102,6 @@ func elevatorListener(elevatorCh chan utils.Elevator, btnReassignChan chan utils
 		// When we receive an update we update the world view
 		case e := <-elevatorCh:
 			WorldViewMutex.Lock()
-			if (e.MotorStopped != WorldView.Elevators[WorldView.ElevatorID].MotorStopped){
-				fmt.Println("Motor stopped?", e.MotorStopped)
-			}
 			WorldView.Elevators[WorldView.ElevatorID] = e
 			WorldViewMutex.Unlock()
 			if e.Obstructed {

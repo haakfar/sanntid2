@@ -67,7 +67,6 @@ func RunMaster(quitChan chan bool, masterReceiveChan chan utils.ButtonMessage, m
 		case btnMsg := <-masterReceiveChan:
 
 			// This is for when the calls are pressed on the master's keypad, its very similar to the other
-			fmt.Println("Received call as master")
 
 			if callAlreadyAssigned(btnMsg) {
 				fmt.Println("Call already assigned")
@@ -144,7 +143,6 @@ func masterSenderUntilConfirmation(btnMsg utils.ButtonMessage) {
 			}
 			WorldViewMutex.Unlock()
 
-			fmt.Println("Confirmation from elevator not received")
 		}
 	}
 }
@@ -169,7 +167,6 @@ func callAlreadyAssigned(btnMsg utils.ButtonMessage) bool {
 		for el := 0; el < utils.N_ELEVATORS; el++ {
 			WorldViewMutex.Lock()
 			if WorldView.Alive[el] && !WorldView.Elevators[el].Obstructed && !WorldView.Elevators[el].MotorStopped && WorldView.Elevators[el].Requests[btnMsg.ButtonEvent.Floor][btnMsg.ButtonEvent.Button] {
-				fmt.Println("Call already assigned to", el)
 				alreadyAssigned = true
 			}
 			WorldViewMutex.Unlock()
