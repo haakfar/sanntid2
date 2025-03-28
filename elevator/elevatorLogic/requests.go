@@ -6,6 +6,8 @@ import (
 	"Driver-go/elevio"
 )
 
+// This module us used by the fsm module to get information about the currently active requests
+
 type DirnBehaviourPair struct {
 	Dirn      elevio.MotorDirection
 	Behaviour utils.ElevatorBehaviour

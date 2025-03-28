@@ -7,6 +7,9 @@ import (
 	"Driver-go/elevio"
 )
 
+// This module regulates the elevator behaviour (moving, stopping on floors, etc.)
+// Its operates as a fsm
+
 var elevator utils.Elevator
 
 // Initialize the elevator

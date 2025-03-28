@@ -8,11 +8,15 @@ import (
 	"time"
 )
 
-// This function receives button broadcasts from the master and sends them to the elevator
-// It also sends a confirmation to the master
-// It also receives cab calls from ButtonSender and sends them to the elevator
-// If the elevator is the master, it receives via channel instead
-func ButtonListener(btnCh chan elevio.ButtonEvent, btnCabChan chan elevio.ButtonEvent, btnMasterChan chan utils.ButtonMessage) {
+// This module manages the button presses. When a button is pressed its sent 
+// to the ReceiveButtonsFromElevator function and when a call is assigned to this elevator
+// its sent to the SendButtonToElevator function
+
+// This function receives the button presses that have been assigned to this elevator, in particular:
+// If the elevator is master, it receives the button presses via btnMasterChan
+// If its a cab call pressed on this elevator, it receives it via btnCabChan
+// Otherwise its received via broadcast form the master and when its received, a confirmation is sent back
+func SendButtonsToElevator(btnCh chan elevio.ButtonEvent, btnCabChan chan elevio.ButtonEvent, btnMasterChan chan utils.ButtonMessage) {
 
 	// Channel and broadcasts to receive the button press from the master and send the confirmation
 	receiveChan := make(chan utils.ButtonMessage)
@@ -50,12 +54,12 @@ func ButtonListener(btnCh chan elevio.ButtonEvent, btnCabChan chan elevio.Button
 	}
 }
 
-// This function receives button events from the elevator and broadcasts them
-// It also listens to reassigned hall calls when an elevator dies (and cab calls when an elevator comes back) and broadcasts them
-// When a button is pressed we send it to the master untile we receive a confirmation
-// If its a cab call its sent to the listener that sends to the elevator
-// If the elevator is master, the calls are sent via channel instead
-func ButtonSender(btnReassignChan chan utils.ButtonMessage, btnCabChan chan elevio.ButtonEvent, btnMasterChan chan utils.ButtonMessage) {
+// This function receives the button presses that have been pressed on this elevator, in particular:
+// If the elevator is master, they are sent to the master.go file via btnMasterChan
+// If its a cab call its sent via btnCabChan
+// Otherwise its sent via broadcast to the master until a confirmation is sent back
+// Also reassigned calls are sent here (when an elevator dies its hall calls, when it comes back its cab calls) 
+func ReceiveButtonsFromElevator(btnReassignChan chan utils.ButtonMessage, btnCabChan chan elevio.ButtonEvent, btnMasterChan chan utils.ButtonMessage) {
 
 	btnChan := make(chan elevio.ButtonEvent)
 	go elevio.PollButtons(btnChan)
@@ -64,7 +68,7 @@ func ButtonSender(btnReassignChan chan utils.ButtonMessage, btnCabChan chan elev
 		// This is for calls sent by the elevator
 		case btnEvent := <-btnChan:
 
-			// If its a cab call its sent to the listener
+			// If its a cab call its sent to SendButtonsToElevator
 			if btnEvent.Button == elevio.BT_Cab {
 				btnCabChan <- btnEvent
 			} else if WorldView.Role == utils.MASTER {

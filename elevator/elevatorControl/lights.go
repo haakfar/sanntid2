@@ -5,6 +5,9 @@ import (
 	"Utils/utils"
 )
 
+// This module simply updates the lights based on the states of the elevators
+
+// This function updates the lights
 func UpdateLights(){
 	for floor := 0; floor < utils.N_FLOORS; floor++ {
 
@@ -19,7 +22,7 @@ func UpdateLights(){
 	}
 }
 
-// For every elevator alive check if theres a call on floor
+// For every elevator alive check if theres a "call" on "floor"
 func callOnFloor(floor int, call elevio.ButtonType) bool {
 
 	for el := 0; el < utils.N_ELEVATORS; el++{

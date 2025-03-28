@@ -6,7 +6,8 @@ import (
 	"math"
 )
 
-// This is the assigner, very messy but it seems to work fine
+// This is the assigner module, very messy but it seems to work fine
+
 // We try to calculate the time that each elevator would take to serve that call and in the end we assign the call to the elevator with the lowest time
 func FindBestElevator(btnEvent elevio.ButtonEvent) int {
 	minTime := -1.0
@@ -107,7 +108,7 @@ func calcTime(elevator utils.Elevator, btnEvent elevio.ButtonEvent) float64 {
 			elevSim.Floor--
 		}
 
-		// Fixing floor position if it gets stuck
+		// Fixing floor position if it gets outside the possible positions
 		if elevSim.Floor<0 {
 			elevSim.Floor = 0
 		}
@@ -122,7 +123,7 @@ func calcTime(elevator utils.Elevator, btnEvent elevio.ButtonEvent) float64 {
 	}
 }
 
-// This function gets the next direction the elevator should take
+// This function gets the next direction the elevator should take based on the calls
 func getDirection(elevator utils.Elevator) elevio.MotorDirection {
 	switch elevator.Dirn {
 	case elevio.MD_Up:
@@ -205,6 +206,7 @@ func getBottomDestination(elevator utils.Elevator) int {
 			}
 		}
 	}
+	
 	// If no calls are found we assume bottom destination = bottom floor
 	return 0
 }

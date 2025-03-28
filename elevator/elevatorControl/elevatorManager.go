@@ -14,6 +14,10 @@ import (
 var WorldViewMutex sync.Mutex
 var WorldView utils.WorldView
 
+// This module is the core of the program and manages the broadcast of the world view
+// It sends the world view via broadcast and listens to the world views sent by the others and acts
+// based on what is received
+
 // Function to initialize the worldview (gets executed when the program starts)
 func init() {
 	WorldViewMutex.Lock()
@@ -57,7 +61,7 @@ func StartManager(elevatorID int, portNumber int) {
 	// Starting the elevator
 	go elevatorLogic.StartElevator(btnCh, elevatorCh)
 
-	// Channel to send cab calls from the sender to the listener
+	// Channel to send cab calls from the button receiver to the button sender
 	btnCabChan := make(chan elevio.ButtonEvent)
 
 	// Channel the elevator uses to send orders to the master.go file (when the elevator is MASTER)
@@ -66,8 +70,8 @@ func StartManager(elevatorID int, portNumber int) {
 	// Channel the elevator uses to receive orders from the master.go file (when the elevator is MASTER)
 	masterReceiveChan := make(chan utils.ButtonMessage)
 
-	// Button listen function (listens from the master and sends to elevator)
-	go ButtonListener(btnCh, btnCabChan, masterSendChan)
+	// When a button press is assigned to this elevator its sent to this function
+	go SendButtonsToElevator(btnCh, btnCabChan, masterSendChan)
 
 	// When an elevator dies, its calls are reassigned through this channel
 	btnReassignChan := make(chan utils.ButtonMessage)
@@ -75,8 +79,8 @@ func StartManager(elevatorID int, portNumber int) {
 	// WorldView update function
 	go elevatorListener(elevatorCh, btnReassignChan)
 
-	// Button send function (listens from the elevator (and the reassigned calls) and sends to master)
-	go ButtonSender(btnReassignChan, btnCabChan, masterReceiveChan)
+	// When a button is pressed on this elevator its sent to this function
+	go ReceiveButtonsFromElevator(btnReassignChan, btnCabChan, masterReceiveChan)
 
 	// World view listener
 	go bcastListener(btnReassignChan, masterReceiveChan, masterSendChan)
@@ -90,6 +94,7 @@ func StartManager(elevatorID int, portNumber int) {
 }
 
 // This function receives updates relative to the elevator from the elevator itself and updates the worldview
+// If the elevator is obstructed or motor blocked, the calls are reassigned
 func elevatorListener(elevatorCh chan utils.Elevator, btnReassignChan chan utils.ButtonMessage) {
 
 	for {
@@ -190,13 +195,13 @@ func bcastListener(btnReassignChan chan utils.ButtonMessage, masterReceiveChan c
 			case wv := <-receiveChan:
 
 				// We update the other elevators
-				for i := 0; i < utils.N_ELEVATORS; i++ {
-					if i != WorldView.ElevatorID {
+				for el := 0; el < utils.N_ELEVATORS; el++ {
+					if el != WorldView.ElevatorID {
 						WorldViewMutex.Lock()
 
 						// If the elevator changed we update the lights
-						if differentElevator(WorldView.Elevators[i], wv.Elevators[i]) {
-							WorldView.Elevators[i] = wv.Elevators[i]
+						if differentElevator(WorldView.Elevators[el], wv.Elevators[el]) {
+							WorldView.Elevators[el] = wv.Elevators[el]
 							WorldViewMutex.Unlock()
 							UpdateLights()
 						} else {
@@ -249,33 +254,33 @@ func bcastListener(btnReassignChan chan utils.ButtonMessage, masterReceiveChan c
 
 		// After listening for 1 second, we update which elevators are alive
 
-		for i := 0; i < utils.N_ELEVATORS; i++ {
+		for el := 0; el < utils.N_ELEVATORS; el++ {
 			WorldViewMutex.Lock()
 
 			// If alive != received, the elevator died or came back
-			if WorldView.Alive[i] != received[i] {
+			if WorldView.Alive[el] != received[el] {
 
-				WorldView.Alive[i] = received[i]
+				WorldView.Alive[el] = received[el]
 
-				if WorldView.Alive[i] == true {
+				if WorldView.Alive[el] == true {
 
-					fmt.Printf("Elevator %d now alive\n", i)
+					fmt.Printf("Elevator %d now alive\n", el)
 
 					// If an elevator comes back alive, we must reassign its cab calls
 					for floor := 0; floor < utils.N_FLOORS; floor++ {
 
 						// We basically simulate pressing all the cab calls button the elevator had
-						if deadCabCalls[i][floor] {
+						if deadCabCalls[el][floor] {
 
 							fmt.Println("Reassinging ", floor, elevio.BT_Cab)
-							deadCabCalls[i][floor] = false
+							deadCabCalls[el][floor] = false
 
 							btnMsg := utils.ButtonMessage{
 								ButtonEvent: elevio.ButtonEvent{
 									Floor:  floor,
 									Button: elevio.BT_Cab,
 								},
-								ElevatorID: i,
+								ElevatorID: el,
 							}
 
 							WorldViewMutex.Unlock()
@@ -285,14 +290,14 @@ func bcastListener(btnReassignChan chan utils.ButtonMessage, masterReceiveChan c
 					}
 				} else {
 
-					fmt.Printf("Elevator %d now dead\n", i)
+					fmt.Printf("Elevator %d now dead\n", el)
 
 					// If an elevator dies, we must reassign his hall calls
 					for floor := 0; floor < utils.N_FLOORS; floor++ {
 						for btn := 0; btn < utils.N_BUTTONS-1; btn++ {
 
 							// We basically simulate pressing all the hall calls button the elevator had and the master will assign to the remaining elevators
-							if WorldView.Elevators[i].Requests[floor][btn] {
+							if WorldView.Elevators[el].Requests[floor][btn] {
 
 								fmt.Println("Reassinging ", floor, btn)
 
@@ -312,8 +317,8 @@ func bcastListener(btnReassignChan chan utils.ButtonMessage, masterReceiveChan c
 
 						// We must also save his cab calls so that they can be reassigned to it when it comes back
 
-						if WorldView.Elevators[i].Requests[floor][elevio.BT_Cab] {
-							deadCabCalls[i][floor] = true
+						if WorldView.Elevators[el].Requests[floor][elevio.BT_Cab] {
+							deadCabCalls[el][floor] = true
 						}
 
 					}
@@ -342,7 +347,7 @@ func bcastListener(btnReassignChan chan utils.ButtonMessage, masterReceiveChan c
 	}
 }
 
-// This function checks if an elevator changed from what we have in the world view
+// This function is used to check if an elevator changed from what we have in the world view
 func differentElevator(el1 utils.Elevator, el2 utils.Elevator) bool {
 	if el1.Floor != el2.Floor || el1.Dirn != el2.Dirn || el1.Behaviour != el2.Behaviour || el1.Obstructed != el2.Obstructed || el1.MotorStopped != el2.MotorStopped {
 		return true

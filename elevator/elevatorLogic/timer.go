@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+// This module is basically a timer used to regulate the door opening
+
 var timerEndTime time.Time
 var timerActive bool
 

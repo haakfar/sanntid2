@@ -8,9 +8,14 @@ import (
 	"time"
 )
 
+// This module manages the master behaviour of the elevator
+
+// Variable to exit when the elevator is not master anymore
 var exit bool
 
-// This function manages the "master stuff" (better explained in the function)
+// This function manages the "master stuff", that is:
+// Recives the button presses via masterReceiveChan if pressed on this elevator or via broadcast (sends confirmation back if via broadcast)
+// Decides to which elevator to assign the call and sends them to the elevator via masterSendChan if assigned to this elevator or via broadcast if not and keeps sending until confirmation
 func RunMaster(quitChan chan bool, masterReceiveChan chan utils.ButtonMessage, masterSendChan chan utils.ButtonMessage) {
 
 	// Channels and broadcasts to receive button presses and send confirmation
@@ -23,7 +28,7 @@ func RunMaster(quitChan chan bool, masterReceiveChan chan utils.ButtonMessage, m
 		// Every time a button is pressed its sent to the master
 		select {
 
-		// If we receive a button pressi via broadcast
+		// If we receive a button press via broadcast
 		case btnMsg := <-receiveChan:
 
 			// We send the confirmation back
@@ -39,13 +44,13 @@ func RunMaster(quitChan chan bool, masterReceiveChan chan utils.ButtonMessage, m
 
 				// If its a cab call its assigned to the elevator that sent it
 				// NOTE: this is for reassigning calls, when an elevator that had cab calls comes back
-				// Normally cab calls should be managed by the elevator
+				// Normally cab calls should be managed by the elevator that received them 
 				fmt.Println("Assigned cab call to", btnMsg.ElevatorID)
 				go masterSenderUntilConfirmation(btnMsg)
 
 			} else {
 
-				// If its a hall call its assiged to an elevator based on that the assigner says
+				// If its a hall call its assiged to an elevator based on what the assigner says
 				btnMsg.ElevatorID = FindBestElevator(btnMsg.ButtonEvent)
 
 				// If we don't find any good elevator, or the call is assigned to us (the master), we send it back via channel 
@@ -62,7 +67,6 @@ func RunMaster(quitChan chan bool, masterReceiveChan chan utils.ButtonMessage, m
 		case btnMsg := <-masterReceiveChan:
 
 			// This is for when the calls are pressed on the master's keypad, its very similar to the other
-			// So the comments will be put only when theres a difference
 			fmt.Println("Received call as master")
 
 			if callAlreadyAssigned(btnMsg) {
@@ -96,7 +100,7 @@ func RunMaster(quitChan chan bool, masterReceiveChan chan utils.ButtonMessage, m
 				fmt.Println("Assigned hall call to", btnMsg.ElevatorID)
 			}
 
-		// When an elevator demotes it terminates
+		// When the elevator demotes it terminates
 		case <-quitChan:
 			exit = true
 			return

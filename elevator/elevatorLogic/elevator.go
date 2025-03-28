@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+// This module is the core of the single elevator logic, it operates completely ignoring the other elevators
+
 // Function called when an elevator starts
 func StartElevator(buttonCh chan elevio.ButtonEvent, elevatorCh chan utils.Elevator) {
 
@@ -16,12 +18,14 @@ func StartElevator(buttonCh chan elevio.ButtonEvent, elevatorCh chan utils.Eleva
 
 	inputPollRate := 25 * time.Millisecond
 
+	// Start the elevator
 	elevio.Init("localhost:15657", utils.N_FLOORS)
 
+	// Channel and function to receive the elevator's floor
 	floorCh := make(chan int)
-
 	go elevio.PollFloorSensor(floorCh)
 
+	// If we aren't on any floor (between floors) we run the init function (it goes down until it gets to a floor)
 	currentFloor := elevio.GetFloor()
 	if currentFloor == -1 {
 		FsmOnInitBetweenFloors()
@@ -33,8 +37,10 @@ func StartElevator(buttonCh chan elevio.ButtonEvent, elevatorCh chan utils.Eleva
 	// Sends the elevator to the elevatorManager that updates the world view
 	elevatorCh <- GetElevator()
 
+	// Function that detects obstructions
 	go obstructionDetector(elevatorCh)
 
+	// Function that detects motor stops
 	go motorStopDetector(elevatorCh)
 
 	for {
@@ -132,7 +138,6 @@ func motorStopDetector(elevatorCh chan utils.Elevator) {
 		if elevator.Dirn != elevio.MD_Stop && time.Since(lastChange) > timeout {
 			
 			if !elevator.MotorStopped {
-				fmt.Println("Motor stopped")
 				elevator.MotorStopped = true
 
 				// We remove the hall calls and update everything
