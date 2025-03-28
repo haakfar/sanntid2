@@ -17,10 +17,10 @@ To kill the program, simply interrupt it (CTRL+C) while it's restarting. Press C
 
 If you prefer to run the program manually without automatic restarts, use:
 
-go run main.go --id <id> --port <port>
+go run main.go --id id --port port
 
 ## Important Notes
 
 Each elevator must have a unique ID (0, 1, or 2).
 
-<port> refers to the elevator's communication port.
+port refers to the elevator's port.
